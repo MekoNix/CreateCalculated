@@ -165,7 +165,6 @@ pub struct Plan {
     pub heat: Option<HeatStats>,
     pub warnings: Vec<String>,
     /// Full automation only: resources that still have to be dug out or found by hand.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub manual: Vec<ResId>,
 }
 
