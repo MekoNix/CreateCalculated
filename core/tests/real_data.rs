@@ -78,3 +78,11 @@ fn full_auto_names_what_still_needs_mining() {
     let manual = p.manual.join(" ");
     assert!(manual.contains("zinc") && manual.contains("copper"), "{manual}");
 }
+
+#[test]
+fn leftovers_are_kept_rather_than_destroyed_in_a_loop() {
+    let Some(cat) = catalog() else { return };
+    let p = auto(&cat, "minecraft:iron_ingot");
+    assert!(!p.nodes.iter().any(|n| n.id.contains("granite")), "{:?}", p.nodes.iter().map(|n| &n.id).collect::<Vec<_>>());
+    assert!(p.nodes.iter().any(|n| matches!(&n.kind, NodeKind::Surplus { res, .. } if res == "minecraft:flint")));
+}

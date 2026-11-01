@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 const RUN_COST: f64 = 0.01;
-const SURPLUS_COST: f64 = 0.02;
 /// Cost of a recipeless item that is not on the base resource list.
 const UNUSUAL_RAW_COST: f64 = 1000.0;
 const STRIPPED_RAW_COST: f64 = 1.5;
@@ -412,9 +411,8 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
         }
     }
 
-    for &v in surplus.values() {
-        objective += SURPLUS_COST * v;
-    }
+    // Leftovers are free on purpose. Any price makes the planner build machines just to destroy
+    // or compress them, and raw material prices already discourage producing too much.
 
     let mut model = vars.minimise(objective).using(good_lp::default_solver);
     let demand = |res: &str| req.targets.iter().filter(|t| t.item == res).map(|t| t.per_minute).sum::<f64>();
