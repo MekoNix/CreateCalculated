@@ -61,7 +61,7 @@ fn gathered(p: &Plan, res: &str) -> f64 {
     p.nodes
         .iter()
         .find_map(|n| match &n.kind {
-            NodeKind::Gather { res: r, per_minute } if r == res => Some(*per_minute),
+            NodeKind::Gather { res: r, per_minute, .. } if r == res => Some(*per_minute),
             _ => None,
         })
         .unwrap_or(0.0)

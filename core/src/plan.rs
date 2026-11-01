@@ -17,15 +17,42 @@ const SURPLUS_COST: f64 = 0.02;
 /// Cost of a recipeless item that is not on the base resource list.
 const UNUSUAL_RAW_COST: f64 = 1000.0;
 const STRIPPED_RAW_COST: f64 = 1.5;
+/// Full automation prices: endless generators, then farms, then digging by hand.
+const AUTO_GENERATOR_COST: f64 = 0.01;
+const AUTO_FARM_COST: f64 = 5.0;
+const AUTO_MINED_COST: f64 = 100.0;
+const GENERATORS: [&str; 4] = ["minecraft:cobblestone", "minecraft:stone", "fluid:minecraft:water", "fluid:minecraft:lava"];
 const FLUID_COST_PER_MB: f64 = 1e-3;
-/// Editable list of what players normally gather.
-const BASE_RESOURCES: &str = include_str!("../data/base_resources.txt");
+/// Editable lists of what players normally gather.
+const MINED_RESOURCES: &str = include_str!("../data/mined_resources.txt");
+const FARM_RESOURCES: &str = include_str!("../data/farm_resources.txt");
 const EPS: f64 = 1e-6;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Target {
     pub item: ResId,
     pub per_minute: f64,
+}
+
+/// How raw materials are valued.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Mode {
+    /// Everything on the resource lists costs the same.
+    #[default]
+    Normal,
+    /// Prefers endless generators and farms, and digs by hand only when nothing else works.
+    FullAuto,
+}
+
+/// Where a gathered resource comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Origin {
+    Generator,
+    Farm,
+    Mined,
+    Unusual,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -55,6 +82,7 @@ pub struct PlanRequest {
     pub include_heat: bool,
     /// Replaces the built-in base resource list when set. Entries may be tags.
     pub base_resources: Option<Vec<ResId>>,
+    pub mode: Mode,
 }
 
 impl Default for PlanRequest {
@@ -70,6 +98,7 @@ impl Default for PlanRequest {
             batch: 1,
             include_heat: true,
             base_resources: None,
+            mode: Mode::Normal,
         }
     }
 }
@@ -90,7 +119,9 @@ pub enum NodeKind {
         machine_options: Vec<Machine>,
     },
     /// No way to produce it: gather by hand.
-    Gather { res: ResId, per_minute: f64 },
+    Gather { res: ResId, per_minute: f64, origin: Origin },
+    /// An endless source in full automation. Fluids have no load.
+    Generate { res: ResId, per_minute: f64, load: Option<Load> },
     /// Taken from storage at the user's request.
     Stock { res: ResId, per_minute: f64 },
     /// Unused by-product or excess, an end of the graph.
@@ -133,6 +164,9 @@ pub struct Plan {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub heat: Option<HeatStats>,
     pub warnings: Vec<String>,
+    /// Full automation only: resources that still have to be dug out or found by hand.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub manual: Vec<ResId>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -152,20 +186,43 @@ impl std::fmt::Display for PlanError {
 
 impl std::error::Error for PlanError {}
 
-/// Resources that may be gathered at normal cost. Choosing a recipe for one takes it off the list.
-fn base_resources(cat: &Catalog, req: &PlanRequest) -> HashSet<ResId> {
-    let builtin = || BASE_RESOURCES.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("# ")).map(String::from).collect::<Vec<_>>();
-    let entries = req.base_resources.clone().unwrap_or_else(builtin);
-    let mut out = HashSet::new();
+/// Parses a resource list, expanding tags.
+fn parse_list(cat: &Catalog, entries: impl Iterator<Item = String>, origin: Origin, out: &mut HashMap<ResId, Origin>) {
     for entry in entries {
         if entry.starts_with('#') {
-            out.extend(cat.tag_members(&entry).iter().cloned());
+            for member in cat.tag_members(&entry) {
+                out.insert(member.clone(), origin);
+            }
         } else {
-            out.insert(entry);
+            out.insert(entry, origin);
         }
     }
-    out.retain(|r| !req.recipe_choice.contains_key(r));
+}
+
+fn file_lines(text: &str) -> impl Iterator<Item = String> + '_ {
+    text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("# ")).map(String::from)
+}
+
+/// Resources that may be gathered, and where they come from.
+/// Choosing a recipe for one takes it off the list.
+fn gatherable(cat: &Catalog, req: &PlanRequest) -> HashMap<ResId, Origin> {
+    let mut out = HashMap::new();
+    match &req.base_resources {
+        Some(list) => parse_list(cat, list.iter().cloned(), Origin::Farm, &mut out),
+        None => {
+            parse_list(cat, file_lines(MINED_RESOURCES), Origin::Mined, &mut out);
+            parse_list(cat, file_lines(FARM_RESOURCES), Origin::Farm, &mut out);
+            parse_list(cat, GENERATORS.iter().map(|g| g.to_string()), Origin::Generator, &mut out);
+        }
+    }
+    out.retain(|r, _| !req.recipe_choice.contains_key(r));
     out
+}
+
+/// Whether the walk stops at a resource instead of looking for recipes that make it.
+/// In full automation mined resources stay open, so gravel can come from cobblestone.
+fn stops_walk(req: &PlanRequest, origin: Origin) -> bool {
+    req.mode == Mode::Normal || origin != Origin::Mined
 }
 
 /// Recipes the request allows, by index in the catalog.
@@ -189,14 +246,15 @@ fn allowed(cat: &Catalog, req: &PlanRequest) -> HashSet<usize> {
 }
 
 /// Walks back from the targets to find the resources and recipes involved.
-fn reach(cat: &Catalog, req: &PlanRequest, allowed: &HashSet<usize>, base: &HashSet<ResId>) -> (BTreeSet<ResId>, BTreeSet<usize>) {
+fn reach(cat: &Catalog, req: &PlanRequest, allowed: &HashSet<usize>, base: &HashMap<ResId, Origin>) -> (BTreeSet<ResId>, BTreeSet<usize>) {
     let stock: HashSet<&str> = req.stock.iter().map(String::as_str).collect();
     let mut resources = BTreeSet::new();
     let mut recipes = BTreeSet::new();
     let mut queue: VecDeque<ResId> = req.targets.iter().map(|t| t.item.clone()).collect();
     while let Some(res) = queue.pop_front() {
         // Nothing is planned above stock or a gathered resource.
-        if !resources.insert(res.clone()) || stock.contains(res.as_str()) || base.contains(&res) {
+        let stop = base.get(&res).is_some_and(|o| stops_walk(req, *o));
+        if !resources.insert(res.clone()) || stock.contains(res.as_str()) || stop {
             continue;
         }
         if res.starts_with('#') {
@@ -217,11 +275,11 @@ fn reach(cat: &Catalog, req: &PlanRequest, allowed: &HashSet<usize>, base: &Hash
 }
 
 /// Resources that can actually be made from things with no recipe, walking forward.
-fn derivable(cat: &Catalog, resources: &BTreeSet<ResId>, recipes: &BTreeSet<usize>, stock: &HashSet<&str>, base: &HashSet<ResId>) -> HashSet<ResId> {
+fn derivable(cat: &Catalog, resources: &BTreeSet<ResId>, recipes: &BTreeSet<usize>, stock: &HashSet<&str>, base: &HashMap<ResId, Origin>) -> HashSet<ResId> {
     let produced: HashSet<&ResId> = recipes.iter().flat_map(|&i| cat.recipes()[i].outputs.iter().map(|o| &o.res)).collect();
     let mut known: HashSet<ResId> = resources
         .iter()
-        .filter(|r| stock.contains(r.as_str()) || base.contains(*r) || (!r.starts_with('#') && !produced.contains(r)))
+        .filter(|r| stock.contains(r.as_str()) || base.contains_key(*r) || (!r.starts_with('#') && !produced.contains(r)))
         .cloned()
         .collect();
     loop {
@@ -245,14 +303,21 @@ fn derivable(cat: &Catalog, resources: &BTreeSet<ResId>, recipes: &BTreeSet<usiz
 
 /// Raw cost of each resource. A compressed form such as a storage block costs as much as
 /// its parts, otherwise gathering one block would look cheaper than nine diamonds.
-fn raw_costs(cat: &Catalog, recipes: &BTreeSet<usize>, resources: &BTreeSet<ResId>, base: &HashSet<ResId>) -> HashMap<ResId, f64> {
+fn raw_costs(cat: &Catalog, recipes: &BTreeSet<usize>, resources: &BTreeSet<ResId>, base: &HashMap<ResId, Origin>, mode: Mode) -> HashMap<ResId, f64> {
     let mut cost: HashMap<ResId, f64> = resources
         .iter()
         .map(|r| {
             let unit = if r.contains("fluid:") { FLUID_COST_PER_MB } else { 1.0 };
             // Stripping is extra work, so plain logs win when a recipe accepts both.
-            let listed = if r.contains(":stripped_") { STRIPPED_RAW_COST } else { 1.0 };
-            (r.clone(), if base.contains(r) { unit * listed } else { unit * UNUSUAL_RAW_COST })
+            let stripped = if r.contains(":stripped_") { STRIPPED_RAW_COST } else { 1.0 };
+            let price = match (base.get(r), mode) {
+                (None, _) => UNUSUAL_RAW_COST,
+                (Some(_), Mode::Normal) => stripped,
+                (Some(Origin::Generator), Mode::FullAuto) => AUTO_GENERATOR_COST,
+                (Some(Origin::Farm), Mode::FullAuto) => AUTO_FARM_COST * stripped,
+                (Some(_), Mode::FullAuto) => AUTO_MINED_COST,
+            };
+            (r.clone(), unit * price)
         })
         .collect();
     let list: Vec<&Recipe> = recipes.iter().map(|&i| &cat.recipes()[i]).collect();
@@ -303,10 +368,10 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
 
     let stock: HashSet<&str> = req.stock.iter().map(String::as_str).collect();
     let allowed = allowed(cat, req);
-    let base = base_resources(cat, req);
+    let base = gatherable(cat, req);
     let (resources, recipes) = reach(cat, req, &allowed, &base);
     let known = derivable(cat, &resources, &recipes, &stock, &base);
-    let costs = raw_costs(cat, &recipes, &resources, &base);
+    let costs = raw_costs(cat, &recipes, &resources, &base, req.mode);
 
     let mut vars = variables!();
     let runs: BTreeMap<usize, Variable> = recipes.iter().map(|&i| (i, vars.add(variable().min(0.0)))).collect();
@@ -330,7 +395,7 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
             if !stock.contains(res.as_str()) && members.is_empty() {
                 sources.insert(res, vars.add(variable().min(0.0)));
             }
-        } else if stock.contains(res.as_str()) || base.contains(res) || !produced.contains(res) || !known.contains(res) {
+        } else if stock.contains(res.as_str()) || base.contains_key(res) || !produced.contains(res) || !known.contains(res) {
             sources.insert(res, vars.add(variable().min(0.0)));
         }
         if res.starts_with('#') && stock.contains(res.as_str()) {
@@ -432,13 +497,14 @@ fn machine_key(m: Machine) -> String {
     serde_json::to_value(m).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
 }
 
-fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, allowed: &HashSet<usize>, stock: &HashSet<&str>, base: &HashSet<ResId>) -> Result<Plan, PlanError> {
+fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, allowed: &HashSet<usize>, stock: &HashSet<&str>, base: &HashMap<ResId, Origin>) -> Result<Plan, PlanError> {
     let mut nodes = Vec::new();
     let mut suppliers: BTreeMap<ResId, Vec<(String, f64)>> = BTreeMap::new();
     let mut consumers: BTreeMap<ResId, Vec<(String, f64)>> = BTreeMap::new();
     let (mut total_su, mut machine_counts) = (0.0, BTreeMap::new());
     let (mut heated, mut superheated) = (0, 0);
     let mut warnings = Vec::new();
+    let mut manual = Vec::new();
 
     for (&i, &x) in &solved.runs {
         if x <= EPS {
@@ -488,11 +554,28 @@ fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, allowed: &HashSe
             continue;
         }
         let in_stock = stock.contains(res.as_str());
-        if !in_stock && !base.contains(res) {
+        let origin = base.get(res).copied().unwrap_or(Origin::Unusual);
+        if !in_stock && origin == Origin::Unusual {
             warnings.push(format!("{res}: not a usual resource and no way to craft it was found"));
         }
-        let id = format!("{}:{res}", if in_stock { "stock" } else { "gather" });
-        let kind = if in_stock { NodeKind::Stock { res: res.clone(), per_minute: v } } else { NodeKind::Gather { res: res.clone(), per_minute: v } };
+        let auto = req.mode == Mode::FullAuto;
+        if !in_stock && auto && matches!(origin, Origin::Mined | Origin::Unusual) {
+            manual.push(res.clone());
+        }
+        let generated = !in_stock && auto && origin == Origin::Generator;
+        let id = format!("{}:{res}", if in_stock { "stock" } else if generated { "generate" } else { "gather" });
+        let kind = if in_stock {
+            NodeKind::Stock { res: res.clone(), per_minute: v }
+        } else if generated {
+            let load = (!res.contains("fluid:")).then(|| machines::size_generator(res, req.rpm, v, &req.config));
+            if let Some(l) = &load {
+                total_su += l.su;
+                *machine_counts.entry(machine_key(l.machine)).or_insert(0u32) += l.count;
+            }
+            NodeKind::Generate { res: res.clone(), per_minute: v, load }
+        } else {
+            NodeKind::Gather { res: res.clone(), per_minute: v, origin }
+        };
         nodes.push(Node { id: id.clone(), kind });
         suppliers.entry(res.clone()).or_default().push((id, v));
     }
@@ -540,7 +623,7 @@ fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, allowed: &HashSe
         coal_per_min: heated as f64 * 1200.0 / COAL_BURN_TICKS,
         cake_per_min: superheated as f64 * 1200.0 / CAKE_BURN_TICKS,
     });
-    Ok(Plan { nodes, edges, total_su, machines: machine_counts, heat, warnings })
+    Ok(Plan { nodes, edges, total_su, machines: machine_counts, heat, warnings, manual })
 }
 
 /// Removes tag conversion nodes, joining flows so edges name the real item.

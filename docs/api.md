@@ -27,15 +27,16 @@
   "overrides": { "create:mixing/brass_ingot": { "rpm": 64, "machine": "mixer", "batch": 1 } },
   "include_heat": true,
   "base_resources": null,
+  "mode": "normal",
   "config": {}
 }
 ```
 
 В ответе:
 
-- `nodes`: поле `type` равно `recipe`, `gather` (добыча), `stock` (склад), `surplus` (остаток) или `target` (цель). У `recipe` есть `loads` (машины, RPM, число, SU, для вентилятора длина потока), `alternatives` и `machine_options`.
+- `nodes`: поле `type` равно `recipe`, `gather` (добыча), `stock` (склад), `generate` (бесконечный источник в режиме `full_auto`), `surplus` (остаток) или `target` (цель). У `recipe` есть `loads` (машины, RPM, число, SU, для вентилятора длина потока), `alternatives` и `machine_options`.
 - `edges`: `from`, `to`, `res`, `per_minute`.
-- `total_su`, `machines`, `heat` (нет при `include_heat: false`), `warnings`.
+- `total_su`, `machines`, `heat` (нет при `include_heat: false`), `warnings`, `manual` (в режиме `full_auto`: что всё ещё добывать вручную).
 
 Если `rpm` выходит за `max_rotation_speed` из конфига или список целей пуст, вернётся 400.
 

@@ -19,6 +19,7 @@ pub enum Machine {
     ItemDrain,
     MechanicalCrafter,
     Fan,
+    Drill,
     Furnace,
     BlastFurnace,
     Smoker,
@@ -37,6 +38,7 @@ impl Machine {
             Machine::Deployer => Some(("deployer", 1)),
             Machine::MechanicalCrafter => Some(("mechanical_crafter", 1)),
             Machine::Fan => Some(("encased_fan", 1)),
+            Machine::Drill => Some(("mechanical_drill", 1)),
             _ => None,
         }
     }
@@ -202,6 +204,34 @@ pub fn crafter_ticks(rpm: f64, cells: u32) -> u32 {
     cells.saturating_sub(1) * phase(1000) + phase(2000)
 }
 
+/// `BlockBreakingKineticBlockEntity.tick` for one block of the given hardness.
+pub fn drill_ticks(rpm: f64, hardness: f32) -> u32 {
+    let speed = rpm.abs() as f32 / 100.0;
+    let (mut progress, mut ticks) = (0, 0);
+    loop {
+        progress += ((speed / hardness) as i32).clamp(1, 10 - progress);
+        ticks += 1;
+        if progress >= 10 {
+            return ticks;
+        }
+        ticks += (hardness / speed) as u32;
+    }
+}
+
+/// Lava spreads one block per 30 ticks in the overworld, so a generator refills that slowly.
+/// This depends on the layout and is an estimate, not a value from Create.
+pub const GENERATOR_REFILL_TICKS: u32 = 30;
+
+/// Drills needed on stone generators. Block hardness comes from the game: cobblestone 2, stone 1.5.
+pub fn size_generator(res: &str, rpm: f64, per_min: f64, cfg: &Config) -> Load {
+    let hardness = if res == "minecraft:stone" { 1.5 } else { 2.0 };
+    let ticks = drill_ticks(rpm, hardness) + GENERATOR_REFILL_TICKS;
+    let exact = per_min / 1200.0 * ticks as f64;
+    let count = if exact <= 1e-9 { 0 } else { (exact - 1e-9).ceil() as u32 };
+    let su = cfg.impact_of("mechanical_drill") * rpm.abs() * count as f64;
+    Load { machine: Machine::Drill, rpm, ticks, items_per_op: 1, exact, count, su, stream_blocks: None, max_belt_rpm: None }
+}
+
 /// `FanProcessing.applyProcessing`.
 pub fn fan_ticks(cfg: &Config, stack: u32) -> u32 {
     cfg.fan_processing_time * ((stack.max(1) - 1) / 16 + 1) + 1
@@ -253,6 +283,7 @@ pub fn timing(machine: Machine, recipe_kind: RecipeKind, duration: u32, cells: u
         Machine::Fan => (fan_ticks(cfg, batch), batch),
         Machine::Furnace => (if duration == 0 { 200 } else { duration }, 1),
         Machine::BlastFurnace | Machine::Smoker => (if duration == 0 { 100 } else { duration }, 1),
+        Machine::Drill => (drill_ticks(rpm, 2.0), 1),
         Machine::Hand => (0, 1),
     }
 }

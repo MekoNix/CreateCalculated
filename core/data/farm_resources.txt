@@ -1,57 +1,6 @@
-# Resources a player normally gathers. These cost 1 even if a recipe for them exists.
-# Anything else without a recipe still works, but costs far more and gets a warning,
-# so the planner does not build iron from horse armor.
+# Resources that grow or drop from mobs, so a farm can produce them without end.
+# In the normal mode they cost 1. In full automation they cost more than generators but less than mining.
 # One id per line. `#` followed by a namespace id is a tag.
-
-# Mined drops
-minecraft:raw_iron
-minecraft:raw_copper
-minecraft:raw_gold
-create:raw_zinc
-minecraft:coal
-minecraft:diamond
-minecraft:emerald
-minecraft:lapis_lazuli
-minecraft:redstone
-minecraft:quartz
-minecraft:amethyst_shard
-minecraft:ancient_debris
-minecraft:glowstone_dust
-minecraft:flint
-
-# Terrain
-minecraft:cobblestone
-minecraft:cobbled_deepslate
-minecraft:stone
-minecraft:andesite
-minecraft:diorite
-minecraft:granite
-minecraft:tuff
-minecraft:calcite
-minecraft:dripstone_block
-minecraft:gravel
-minecraft:sand
-minecraft:red_sand
-minecraft:dirt
-minecraft:clay_ball
-minecraft:netherrack
-minecraft:soul_sand
-minecraft:soul_soil
-minecraft:basalt
-minecraft:blackstone
-minecraft:end_stone
-minecraft:obsidian
-minecraft:ice
-minecraft:snowball
-create:limestone
-create:scoria
-create:asurine
-create:crimsite
-create:ochrum
-create:veridium
-minecraft:mud
-minecraft:moss_block
-minecraft:sculk
 
 # Plants
 #minecraft:logs
@@ -135,6 +84,4 @@ minecraft:honey_bottle
 #minecraft:wool
 
 # Fluids
-fluid:minecraft:water
-fluid:minecraft:lava
 fluid:minecraft:milk

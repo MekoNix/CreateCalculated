@@ -46,6 +46,7 @@ impl Default for Config {
                 ("millstone", 4.0),
                 ("mechanical_saw", 4.0),
                 ("deployer", 4.0),
+                ("mechanical_drill", 4.0),
                 ("mechanical_crafter", 2.0),
                 ("encased_fan", 2.0),
             ]),

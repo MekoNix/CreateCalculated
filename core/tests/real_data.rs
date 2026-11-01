@@ -2,7 +2,7 @@
 //! so these skip themselves when `data/bundle.json` is missing. See docs/import.md.
 
 use createcalc_core::model::{Bundle, Catalog};
-use createcalc_core::plan::{plan, NodeKind, Plan, PlanRequest, Target};
+use createcalc_core::plan::{plan, Mode, NodeKind, Plan, PlanRequest, Target};
 
 fn catalog() -> Option<Catalog> {
     let text = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../data/bundle.json")).ok()?;
@@ -54,4 +54,27 @@ fn every_target_has_supply_without_unusual_raws() {
         assert!(p.warnings.is_empty(), "{item}: {:?}", p.warnings);
         assert!(p.edges.iter().any(|e| e.to == format!("target:{item}")), "{item} has no incoming edge");
     }
+}
+
+fn auto(cat: &Catalog, item: &str) -> Plan {
+    plan(cat, &PlanRequest { targets: vec![Target { item: item.into(), per_minute: 60.0 }], mode: Mode::FullAuto, ..Default::default() }).unwrap()
+}
+
+#[test]
+fn full_auto_builds_iron_and_alloy_from_generators() {
+    let Some(cat) = catalog() else { return };
+    for item in ["minecraft:iron_ingot", "create:andesite_alloy"] {
+        let p = auto(&cat, item);
+        assert!(p.manual.is_empty(), "{item}: {:?}", p.manual);
+        assert!(p.nodes.iter().any(|n| matches!(&n.kind, NodeKind::Generate { res, .. } if res == "minecraft:cobblestone")), "{item}");
+        assert!(gathered(&p).is_empty(), "{item}: {:?}", gathered(&p));
+    }
+}
+
+#[test]
+fn full_auto_names_what_still_needs_mining() {
+    let Some(cat) = catalog() else { return };
+    let p = auto(&cat, "create:brass_ingot");
+    let manual = p.manual.join(" ");
+    assert!(manual.contains("zinc") && manual.contains("copper"), "{manual}");
 }
