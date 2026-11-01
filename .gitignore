@@ -1,0 +1,4 @@
+target/
+/data/
+*.jar
+.DS_Store
