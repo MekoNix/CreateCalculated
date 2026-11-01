@@ -1,5 +1,5 @@
 # Resources a player normally gathers. These cost 1 even if a recipe for them exists.
-# Anything else without a recipe still works, but costs much more and gets a warning,
+# Anything else without a recipe still works, but costs far more and gets a warning,
 # so the planner does not build iron from horse armor.
 # One id per line. `#` followed by a namespace id is a tag.
 
@@ -45,6 +45,13 @@ minecraft:ice
 minecraft:snowball
 create:limestone
 create:scoria
+create:asurine
+create:crimsite
+create:ochrum
+create:veridium
+minecraft:mud
+minecraft:moss_block
+minecraft:sculk
 
 # Plants
 #minecraft:logs
@@ -77,6 +84,12 @@ minecraft:lily_pad
 minecraft:nether_wart
 minecraft:crimson_fungus
 minecraft:warped_fungus
+minecraft:chorus_fruit
+minecraft:sea_pickle
+minecraft:seagrass
+minecraft:dried_kelp
+minecraft:torchflower_seeds
+minecraft:pitcher_pod
 
 # Mob drops and animal products
 minecraft:egg
@@ -96,6 +109,27 @@ minecraft:magma_cream
 minecraft:prismarine_shard
 minecraft:prismarine_crystals
 minecraft:ink_sac
+minecraft:glow_ink_sac
+minecraft:rabbit
+minecraft:rabbit_hide
+minecraft:rabbit_foot
+minecraft:beef
+minecraft:porkchop
+minecraft:chicken
+minecraft:mutton
+minecraft:cod
+minecraft:salmon
+minecraft:tropical_fish
+minecraft:pufferfish
+minecraft:breeze_rod
+minecraft:shulker_shell
+minecraft:nautilus_shell
+minecraft:heart_of_the_sea
+minecraft:turtle_scute
+minecraft:armadillo_scute
+minecraft:wither_skeleton_skull
+minecraft:nether_star
+minecraft:echo_shard
 minecraft:honeycomb
 minecraft:honey_bottle
 #minecraft:wool

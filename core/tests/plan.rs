@@ -197,7 +197,7 @@ fn batch_changes_crusher_count() {
     let single = plan(&cat, &req).unwrap();
     req.batch = 64;
     let batched = plan(&cat, &req).unwrap();
-    assert_eq!(single.machines["crushing_wheels"], 10); // 60 a minute each
+    assert_eq!(single.machines["crushing_wheels"], 11); // 57 a minute each
     assert_eq!(batched.machines["crushing_wheels"], 1); // 680 a minute
 }
 

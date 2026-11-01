@@ -15,7 +15,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 const RUN_COST: f64 = 0.01;
 const SURPLUS_COST: f64 = 0.02;
 /// Cost of a recipeless item that is not on the base resource list.
-const UNUSUAL_RAW_COST: f64 = 20.0;
+const UNUSUAL_RAW_COST: f64 = 1000.0;
+const STRIPPED_RAW_COST: f64 = 1.5;
 const FLUID_COST_PER_MB: f64 = 1e-3;
 /// Editable list of what players normally gather.
 const BASE_RESOURCES: &str = include_str!("../data/base_resources.txt");
@@ -158,8 +159,7 @@ fn base_resources(cat: &Catalog, req: &PlanRequest) -> HashSet<ResId> {
     let mut out = HashSet::new();
     for entry in entries {
         if entry.starts_with('#') {
-            // A stripped log is a processed log, so it should not be picked as the raw form.
-            out.extend(cat.tag_members(&entry).iter().filter(|m| !m.contains(":stripped_")).cloned());
+            out.extend(cat.tag_members(&entry).iter().cloned());
         } else {
             out.insert(entry);
         }
@@ -250,7 +250,9 @@ fn raw_costs(cat: &Catalog, recipes: &BTreeSet<usize>, resources: &BTreeSet<ResI
         .iter()
         .map(|r| {
             let unit = if r.contains("fluid:") { FLUID_COST_PER_MB } else { 1.0 };
-            (r.clone(), if base.contains(r) { unit } else { unit * UNUSUAL_RAW_COST })
+            // Stripping is extra work, so plain logs win when a recipe accepts both.
+            let listed = if r.contains(":stripped_") { STRIPPED_RAW_COST } else { 1.0 };
+            (r.clone(), if base.contains(r) { unit * listed } else { unit * UNUSUAL_RAW_COST })
         })
         .collect();
     let list: Vec<&Recipe> = recipes.iter().map(|&i| &cat.recipes()[i]).collect();
@@ -266,6 +268,13 @@ fn raw_costs(cat: &Catalog, recipes: &BTreeSet<usize>, resources: &BTreeSet<ResI
         }
     }
     cost
+}
+
+/// Items a run yields. Charging by output rather than by run keeps a block crafted
+/// and then broken up from looking cheaper than handling its nine items directly.
+fn output_units(r: &Recipe) -> f64 {
+    let units: f64 = r.outputs.iter().map(|o| if o.res.contains("fluid:") { o.expected() / 1000.0 } else { o.expected() }).sum();
+    units.max(1.0)
 }
 
 pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
@@ -329,8 +338,8 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
     }
 
     let mut objective = Expression::from(0.0);
-    for &v in runs.values() {
-        objective += RUN_COST * v;
+    for (&i, &v) in &runs {
+        objective += RUN_COST * output_units(&cat.recipes()[i]) * v;
     }
     for (res, &v) in &sources {
         if !stock.contains(res.as_str()) {

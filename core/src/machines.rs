@@ -176,8 +176,10 @@ pub fn crushing_ticks(rpm: f64, duration: u32, stack: u32) -> u32 {
         let divisor = if applied { 1.0 } else { log };
         remaining -= (speed / divisor).clamp(0.25, 20.0);
         ticks += 1;
+        // The tick that applies the recipe returns early, so output waits for the next one.
         if remaining < 20.0 && !applied {
             applied = true;
+            continue;
         }
         if remaining <= 0.0 {
             return ticks;

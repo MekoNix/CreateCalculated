@@ -41,6 +41,9 @@ fn iron_does_not_come_from_iron_blocks() {
     let p = solve(&cat, "minecraft:iron_ingot");
     assert!(!p.nodes.iter().any(|n| n.id.contains("iron_block")), "{:?}", p.nodes);
     assert!(!p.edges.iter().any(|e| e.res == "minecraft:iron_block"));
+    // Nor by way of a raw block crafted only to be broken up again.
+    let tube = solve(&cat, "create:electron_tube");
+    assert!(!tube.nodes.iter().any(|n| n.id.contains("raw_iron_block")), "{:?}", tube.nodes);
 }
 
 #[test]

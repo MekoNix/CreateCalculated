@@ -37,8 +37,9 @@ fn saw_cycle() {
 #[test]
 fn crushing_depends_on_stack() {
     // A single item always loses 20 per tick regardless of RPM.
-    assert_eq!(crushing_ticks(256.0, 400, 1), 20);
-    assert_eq!(crushing_ticks(64.0, 400, 1), 20);
+    // Tick 20 reaches 0 and applies the recipe, tick 21 outputs.
+    assert_eq!(crushing_ticks(256.0, 400, 1), 21);
+    assert_eq!(crushing_ticks(64.0, 400, 1), 21);
     // 16 items at 256 RPM: 20.48 / 4 = 5.12 per tick until below 20.
     assert_eq!(crushing_ticks(256.0, 400, 16), 76);
     assert_eq!(crushing_ticks(256.0, 400, 64), 113);
@@ -77,7 +78,7 @@ fn stress_counts_every_block() {
     assert!((press.exact - 0.5).abs() < 1e-9);
     assert_eq!(press.su, 8.0 * 256.0);
     // Crushing wheels work in pairs.
-    let wheels = size(Machine::CrushingWheels, RecipeKind::Crushing, 400, 0, 256.0, 1, 60.0, &cfg);
+    let wheels = size(Machine::CrushingWheels, RecipeKind::Crushing, 400, 0, 256.0, 1, 50.0, &cfg);
     assert_eq!(wheels.count, 1);
     assert_eq!(wheels.su, 2.0 * 8.0 * 256.0);
     // A 9-cell grid needs 9 crafters.
