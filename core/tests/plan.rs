@@ -244,3 +244,21 @@ fn power_sources() {
     assert_eq!(count("large_water_wheel"), 40); // 512 SU each
     assert_eq!(count("windmill_bearing"), 5); // 64 sails: 8 RPM, 4096 SU
 }
+
+#[test]
+fn base_resource_beats_a_longer_recipe_unless_a_recipe_is_chosen() {
+    let cat = catalog();
+    // Iron can be crafted, but on this list it is simply gathered.
+    let mut req = request("sheet", 60.0);
+    req.base_resources = Some(vec!["iron".into()]);
+    let p = plan(&cat, &req).unwrap();
+    close(gathered(&p, "iron"), 60.0);
+    close(runs(&p, "smelt_crushed"), 0.0);
+    assert!(p.warnings.is_empty());
+    // Choosing the recipe takes iron off the list.
+    req.recipe_choice.insert("iron".into(), "smelt_crushed".into());
+    let p = plan(&cat, &req).unwrap();
+    close(gathered(&p, "iron"), 0.0);
+    close(runs(&p, "smelt_crushed"), 60.0);
+    assert!(!p.warnings.is_empty());
+}

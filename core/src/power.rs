@@ -56,7 +56,7 @@ pub fn plan_power(su: f64, sails: u32, cfg: &Config) -> PowerPlan {
         burners_seething: levels.div_ceil(2),
     };
     let windmill_rpm = (sails / cfg.windmill_sails_per_rpm.max(1)).clamp(1, 16) as f64;
-    let mut source = |id: &str, su_each: f64| Source { id: id.to_string(), su_each, count: need(su, su_each) };
+    let source = |id: &str, su_each: f64| Source { id: id.to_string(), su_each, count: need(su, su_each) };
     let sources = vec![
         // WaterWheelBlockEntity: 8 RPM / size, the large wheel has size 2.
         source("water_wheel", cfg.capacity_of("water_wheel") * 8.0),

@@ -128,7 +128,8 @@ fn resolve_tags(pack: &Pack) -> BTreeMap<ResId, Vec<ResId>> {
             let mut out = BTreeSet::new();
             flatten(tag, &raw, &mut BTreeSet::new(), &mut out);
             // Tags list optional entries from mods that are not installed.
-            let members = out.into_iter().filter(|m| pack.mods.contains(namespace_of(m))).collect();
+            // Flowing variants are world states, recipes never produce them.
+            let members = out.into_iter().filter(|m| pack.mods.contains(namespace_of(m)) && !m.contains(":flowing_")).collect();
             (tag.clone(), members)
         })
         .collect()
@@ -170,6 +171,14 @@ impl Parser<'_> {
         if let Some(children) = v.get("children").and_then(Value::as_array) {
             return self.alternatives(children);
         }
+        if v.get("type").and_then(Value::as_str) == Some("neoforge:difference") {
+            return self.difference(v);
+        }
+        // A fluid with components, such as a specific potion, is its own resource.
+        if let (Some(f), Some(a)) = (v.get("fluids").and_then(Value::as_str), amount) {
+            let potion = v.pointer("/components/minecraft:potion_contents/potion").and_then(Value::as_str);
+            return Ok((potion.map_or(format!("fluid:{f}"), |p| format!("fluid:{f}[{p}]")), a));
+        }
         if let Some(t) = v.get("fluid_tag").and_then(Value::as_str) {
             return Ok((format!("#fluid:{t}"), amount.unwrap_or(1.0)));
         }
@@ -189,6 +198,19 @@ impl Parser<'_> {
             return Ok((i.to_string(), count));
         }
         Err(format!("unsupported ingredient {v}"))
+    }
+
+    /// `neoforge:difference`: members of `base` without those of `subtracted`.
+    fn difference(&mut self, v: &Value) -> Result<(ResId, f64), String> {
+        let (base, amount) = self.ingredient(v.get("base").ok_or("difference without base")?)?;
+        let (subtracted, _) = self.ingredient(v.get("subtracted").ok_or("difference without subtracted")?)?;
+        let members_of = |res: &ResId, tags: &BTreeMap<ResId, Vec<ResId>>| {
+            if res.starts_with('#') { tags.get(res).cloned().unwrap_or_default() } else { vec![res.clone()] }
+        };
+        let removed = members_of(&subtracted, self.tags);
+        let members: Vec<Value> = members_of(&base, self.tags).into_iter().filter(|m| !removed.contains(m)).map(|m| serde_json::json!({ "item": m })).collect();
+        let (res, _) = self.alternatives(&members)?;
+        Ok((res, amount))
     }
 
     fn alternatives(&mut self, list: &[Value]) -> Result<(ResId, f64), String> {

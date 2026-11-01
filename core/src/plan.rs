@@ -12,8 +12,13 @@ use good_lp::{constraint, variable, variables, Expression, Solution, SolverModel
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
-const RUN_COST: f64 = 1e-3;
+const RUN_COST: f64 = 0.01;
+const SURPLUS_COST: f64 = 0.02;
+/// Cost of a recipeless item that is not on the base resource list.
+const UNUSUAL_RAW_COST: f64 = 20.0;
 const FLUID_COST_PER_MB: f64 = 1e-3;
+/// Editable list of what players normally gather.
+const BASE_RESOURCES: &str = include_str!("../data/base_resources.txt");
 const EPS: f64 = 1e-6;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,6 +52,8 @@ pub struct PlanRequest {
     pub batch: u32,
     /// Report blaze burners and fuel.
     pub include_heat: bool,
+    /// Replaces the built-in base resource list when set. Entries may be tags.
+    pub base_resources: Option<Vec<ResId>>,
 }
 
 impl Default for PlanRequest {
@@ -61,6 +68,7 @@ impl Default for PlanRequest {
             overrides: BTreeMap::new(),
             batch: 1,
             include_heat: true,
+            base_resources: None,
         }
     }
 }
@@ -143,6 +151,23 @@ impl std::fmt::Display for PlanError {
 
 impl std::error::Error for PlanError {}
 
+/// Resources that may be gathered at normal cost. Choosing a recipe for one takes it off the list.
+fn base_resources(cat: &Catalog, req: &PlanRequest) -> HashSet<ResId> {
+    let builtin = || BASE_RESOURCES.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("# ")).map(String::from).collect::<Vec<_>>();
+    let entries = req.base_resources.clone().unwrap_or_else(builtin);
+    let mut out = HashSet::new();
+    for entry in entries {
+        if entry.starts_with('#') {
+            // A stripped log is a processed log, so it should not be picked as the raw form.
+            out.extend(cat.tag_members(&entry).iter().filter(|m| !m.contains(":stripped_")).cloned());
+        } else {
+            out.insert(entry);
+        }
+    }
+    out.retain(|r| !req.recipe_choice.contains_key(r));
+    out
+}
+
 /// Recipes the request allows, by index in the catalog.
 fn allowed(cat: &Catalog, req: &PlanRequest) -> HashSet<usize> {
     let disabled: HashSet<&str> = req.disabled_recipes.iter().map(String::as_str).collect();
@@ -164,13 +189,14 @@ fn allowed(cat: &Catalog, req: &PlanRequest) -> HashSet<usize> {
 }
 
 /// Walks back from the targets to find the resources and recipes involved.
-fn reach(cat: &Catalog, req: &PlanRequest, allowed: &HashSet<usize>) -> (BTreeSet<ResId>, BTreeSet<usize>) {
+fn reach(cat: &Catalog, req: &PlanRequest, allowed: &HashSet<usize>, base: &HashSet<ResId>) -> (BTreeSet<ResId>, BTreeSet<usize>) {
     let stock: HashSet<&str> = req.stock.iter().map(String::as_str).collect();
     let mut resources = BTreeSet::new();
     let mut recipes = BTreeSet::new();
     let mut queue: VecDeque<ResId> = req.targets.iter().map(|t| t.item.clone()).collect();
     while let Some(res) = queue.pop_front() {
-        if !resources.insert(res.clone()) || stock.contains(res.as_str()) {
+        // Nothing is planned above stock or a gathered resource.
+        if !resources.insert(res.clone()) || stock.contains(res.as_str()) || base.contains(&res) {
             continue;
         }
         if res.starts_with('#') {
@@ -191,11 +217,11 @@ fn reach(cat: &Catalog, req: &PlanRequest, allowed: &HashSet<usize>) -> (BTreeSe
 }
 
 /// Resources that can actually be made from things with no recipe, walking forward.
-fn derivable(cat: &Catalog, resources: &BTreeSet<ResId>, recipes: &BTreeSet<usize>, stock: &HashSet<&str>) -> HashSet<ResId> {
+fn derivable(cat: &Catalog, resources: &BTreeSet<ResId>, recipes: &BTreeSet<usize>, stock: &HashSet<&str>, base: &HashSet<ResId>) -> HashSet<ResId> {
     let produced: HashSet<&ResId> = recipes.iter().flat_map(|&i| cat.recipes()[i].outputs.iter().map(|o| &o.res)).collect();
     let mut known: HashSet<ResId> = resources
         .iter()
-        .filter(|r| stock.contains(r.as_str()) || (!r.starts_with('#') && !produced.contains(r)))
+        .filter(|r| stock.contains(r.as_str()) || base.contains(*r) || (!r.starts_with('#') && !produced.contains(r)))
         .cloned()
         .collect();
     loop {
@@ -219,10 +245,13 @@ fn derivable(cat: &Catalog, resources: &BTreeSet<ResId>, recipes: &BTreeSet<usiz
 
 /// Raw cost of each resource. A compressed form such as a storage block costs as much as
 /// its parts, otherwise gathering one block would look cheaper than nine diamonds.
-fn raw_costs(cat: &Catalog, recipes: &BTreeSet<usize>, resources: &BTreeSet<ResId>) -> HashMap<ResId, f64> {
+fn raw_costs(cat: &Catalog, recipes: &BTreeSet<usize>, resources: &BTreeSet<ResId>, base: &HashSet<ResId>) -> HashMap<ResId, f64> {
     let mut cost: HashMap<ResId, f64> = resources
         .iter()
-        .map(|r| (r.clone(), if r.contains("fluid:") { FLUID_COST_PER_MB } else { 1.0 }))
+        .map(|r| {
+            let unit = if r.contains("fluid:") { FLUID_COST_PER_MB } else { 1.0 };
+            (r.clone(), if base.contains(r) { unit } else { unit * UNUSUAL_RAW_COST })
+        })
         .collect();
     let list: Vec<&Recipe> = recipes.iter().map(|&i| &cat.recipes()[i]).collect();
     for a in &list {
@@ -264,9 +293,10 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
 
     let stock: HashSet<&str> = req.stock.iter().map(String::as_str).collect();
     let allowed = allowed(cat, req);
-    let (resources, recipes) = reach(cat, req, &allowed);
-    let known = derivable(cat, &resources, &recipes, &stock);
-    let costs = raw_costs(cat, &recipes, &resources);
+    let base = base_resources(cat, req);
+    let (resources, recipes) = reach(cat, req, &allowed, &base);
+    let known = derivable(cat, &resources, &recipes, &stock, &base);
+    let costs = raw_costs(cat, &recipes, &resources, &base);
 
     let mut vars = variables!();
     let runs: BTreeMap<usize, Variable> = recipes.iter().map(|&i| (i, vars.add(variable().min(0.0)))).collect();
@@ -277,7 +307,10 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
     let produced: HashSet<&ResId> = recipes.iter().flat_map(|&i| cat.recipes()[i].outputs.iter().map(|o| &o.res)).collect();
 
     for res in &resources {
-        surplus.insert(res, vars.add(variable().min(0.0)));
+        // A tag only passes items through, so leftovers stay on the real item.
+        if !res.starts_with('#') {
+            surplus.insert(res, vars.add(variable().min(0.0)));
+        }
         if res.starts_with('#') {
             let members = cat.tag_members(res);
             for m in members.iter().filter(|m| resources.contains(*m)) {
@@ -287,7 +320,7 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
             if !stock.contains(res.as_str()) && members.is_empty() {
                 sources.insert(res, vars.add(variable().min(0.0)));
             }
-        } else if stock.contains(res.as_str()) || !produced.contains(res) || !known.contains(res) {
+        } else if stock.contains(res.as_str()) || base.contains(res) || !produced.contains(res) || !known.contains(res) {
             sources.insert(res, vars.add(variable().min(0.0)));
         }
         if res.starts_with('#') && stock.contains(res.as_str()) {
@@ -303,6 +336,10 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
         if !stock.contains(res.as_str()) {
             objective += costs.get(*res).copied().unwrap_or(1.0) * v;
         }
+    }
+
+    for &v in surplus.values() {
+        objective += SURPLUS_COST * v;
     }
 
     let mut model = vars.minimise(objective).using(good_lp::default_solver);
@@ -327,7 +364,9 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
         if let Some(&s) = sources.get(res) {
             balance += s;
         }
-        balance -= surplus[res];
+        if let Some(&w) = surplus.get(res) {
+            balance -= w;
+        }
         model = model.with(constraint!(balance == demand(res)));
     }
     let solution = model.solve().map_err(|e| PlanError::Solver(e.to_string()))?;
@@ -337,7 +376,7 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
         sources: sources.iter().map(|(r, &v)| ((*r).clone(), solution.value(v))).collect(),
         surplus: surplus.iter().map(|(r, &v)| ((*r).clone(), solution.value(v))).collect(),
         conversions: conversions.iter().map(|(k, &v)| (k.clone(), solution.value(v))).collect(),
-    }, &allowed, &stock)
+    }, &allowed, &stock, &base)
 }
 
 struct Solved {
@@ -370,7 +409,7 @@ fn machine_key(m: Machine) -> String {
     serde_json::to_value(m).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
 }
 
-fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, allowed: &HashSet<usize>, stock: &HashSet<&str>) -> Result<Plan, PlanError> {
+fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, allowed: &HashSet<usize>, stock: &HashSet<&str>, base: &HashSet<ResId>) -> Result<Plan, PlanError> {
     let mut nodes = Vec::new();
     let mut suppliers: BTreeMap<ResId, Vec<(String, f64)>> = BTreeMap::new();
     let mut consumers: BTreeMap<ResId, Vec<(String, f64)>> = BTreeMap::new();
@@ -426,6 +465,9 @@ fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, allowed: &HashSe
             continue;
         }
         let in_stock = stock.contains(res.as_str());
+        if !in_stock && !base.contains(res) {
+            warnings.push(format!("{res}: not a usual resource and no way to craft it was found"));
+        }
         let id = format!("{}:{res}", if in_stock { "stock" } else { "gather" });
         let kind = if in_stock { NodeKind::Stock { res: res.clone(), per_minute: v } } else { NodeKind::Gather { res: res.clone(), per_minute: v } };
         nodes.push(Node { id: id.clone(), kind });

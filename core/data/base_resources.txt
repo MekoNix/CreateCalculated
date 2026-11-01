@@ -1,0 +1,106 @@
+# Resources a player normally gathers. These cost 1 even if a recipe for them exists.
+# Anything else without a recipe still works, but costs much more and gets a warning,
+# so the planner does not build iron from horse armor.
+# One id per line. `#` followed by a namespace id is a tag.
+
+# Mined drops
+minecraft:raw_iron
+minecraft:raw_copper
+minecraft:raw_gold
+create:raw_zinc
+minecraft:coal
+minecraft:diamond
+minecraft:emerald
+minecraft:lapis_lazuli
+minecraft:redstone
+minecraft:quartz
+minecraft:amethyst_shard
+minecraft:ancient_debris
+minecraft:glowstone_dust
+minecraft:flint
+
+# Terrain
+minecraft:cobblestone
+minecraft:cobbled_deepslate
+minecraft:stone
+minecraft:andesite
+minecraft:diorite
+minecraft:granite
+minecraft:tuff
+minecraft:calcite
+minecraft:dripstone_block
+minecraft:gravel
+minecraft:sand
+minecraft:red_sand
+minecraft:dirt
+minecraft:clay_ball
+minecraft:netherrack
+minecraft:soul_sand
+minecraft:soul_soil
+minecraft:basalt
+minecraft:blackstone
+minecraft:end_stone
+minecraft:obsidian
+minecraft:ice
+minecraft:snowball
+create:limestone
+create:scoria
+
+# Plants
+#minecraft:logs
+#minecraft:saplings
+#minecraft:leaves
+#minecraft:small_flowers
+#minecraft:tall_flowers
+minecraft:wheat
+minecraft:wheat_seeds
+minecraft:sugar_cane
+minecraft:bamboo
+minecraft:kelp
+minecraft:cactus
+minecraft:beetroot
+minecraft:beetroot_seeds
+minecraft:potato
+minecraft:carrot
+minecraft:melon_slice
+minecraft:melon_seeds
+minecraft:pumpkin
+minecraft:pumpkin_seeds
+minecraft:cocoa_beans
+minecraft:apple
+minecraft:sweet_berries
+minecraft:glow_berries
+minecraft:red_mushroom
+minecraft:brown_mushroom
+minecraft:vine
+minecraft:lily_pad
+minecraft:nether_wart
+minecraft:crimson_fungus
+minecraft:warped_fungus
+
+# Mob drops and animal products
+minecraft:egg
+minecraft:feather
+minecraft:leather
+minecraft:string
+minecraft:bone
+minecraft:gunpowder
+minecraft:ender_pearl
+minecraft:blaze_rod
+minecraft:ghast_tear
+minecraft:slime_ball
+minecraft:rotten_flesh
+minecraft:spider_eye
+minecraft:phantom_membrane
+minecraft:magma_cream
+minecraft:prismarine_shard
+minecraft:prismarine_crystals
+minecraft:ink_sac
+minecraft:honeycomb
+minecraft:honey_bottle
+#minecraft:wool
+
+# Fluids
+fluid:minecraft:water
+fluid:minecraft:lava
+fluid:minecraft:milk
