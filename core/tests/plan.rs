@@ -262,3 +262,27 @@ fn base_resource_beats_a_longer_recipe_unless_a_recipe_is_chosen() {
     close(runs(&p, "smelt_crushed"), 60.0);
     assert!(!p.warnings.is_empty());
 }
+
+#[test]
+fn grid_recipes_default_to_the_machine_with_least_stress() {
+    let cat = catalog();
+    let machine_of = |p: &Plan| {
+        p.nodes.iter().find_map(|n| match &n.kind {
+            NodeKind::Recipe { recipe, loads, .. } if recipe == "block" => Some(loads[0].machine),
+            _ => None,
+        })
+    };
+    let mut req = request("diamond_block", 60.0);
+    // A full 3x3 of one item fits a press: 8 SU/RPM against 9 crafters at 2 SU/RPM each.
+    let p = plan(&cat, &req).unwrap();
+    assert_eq!(machine_of(&p), Some(Machine::Press));
+    close(p.total_su, 8.0 * 256.0);
+    // An explicit choice still wins.
+    req.overrides.insert("block".into(), NodeOverride { machine: Some(Machine::MechanicalCrafter), ..Default::default() });
+    let p = plan(&cat, &req).unwrap();
+    assert_eq!(machine_of(&p), Some(Machine::MechanicalCrafter));
+    // With the press disabled in config it falls back to the crafter.
+    let mut req = request("diamond_block", 60.0);
+    req.config.allow_shaped_square_in_press = false;
+    assert_eq!(machine_of(&plan(&cat, &req).unwrap()), Some(Machine::MechanicalCrafter));
+}

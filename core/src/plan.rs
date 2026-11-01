@@ -6,7 +6,7 @@
 
 use crate::config::Config;
 use crate::machines::{self, Load, Machine};
-use crate::model::{Catalog, Heat, Recipe, ResId};
+use crate::model::{Catalog, Heat, Recipe, RecipeKind, ResId};
 use crate::power::{CAKE_BURN_TICKS, COAL_BURN_TICKS};
 use good_lp::{constraint, variable, variables, Expression, Solution, SolverModel, Variable};
 use serde::{Deserialize, Serialize};
@@ -178,7 +178,7 @@ fn allowed(cat: &Catalog, req: &PlanRequest) -> HashSet<usize> {
             if disabled.contains(r.id.as_str()) {
                 return false;
             }
-            if r.kind != crate::model::RecipeKind::SequencedAssembly && machines::options(r, &req.config).is_empty() {
+            if r.kind != RecipeKind::SequencedAssembly && machines::options(r, &req.config).is_empty() {
                 return false;
             }
             // A forced recipe rules out others whose main output is that item.
@@ -264,7 +264,8 @@ fn raw_costs(cat: &Catalog, recipes: &BTreeSet<usize>, resources: &BTreeSet<ResI
         });
         if is_inverse && input.amount > output.amount {
             let part = cost.get(&input.res).copied().unwrap_or(1.0);
-            cost.insert(output.res.clone(), part * input.amount / output.amount);
+            // Slightly over the sum of its parts, so a tie never gathers the block itself.
+            cost.insert(output.res.clone(), part * input.amount / output.amount * 1.01);
         }
     }
     cost
@@ -410,8 +411,21 @@ fn size_recipe(r: &Recipe, req: &PlanRequest, runs_per_min: f64) -> (Vec<Load>, 
         return (loads, vec![]);
     }
     let options = machines::options(r, cfg);
-    let machine = over.and_then(|o| o.machine).filter(|m| options.contains(m)).or(options.first().copied()).unwrap_or(Machine::Hand);
-    (vec![machines::size(machine, r.kind, r.duration, r.cells, rpm, batch, runs_per_min, cfg)], options)
+    let sized = |m: Machine| machines::size(m, r.kind, r.duration, r.cells, rpm, batch, runs_per_min, cfg);
+    let chosen = over.and_then(|o| o.machine).filter(|m| options.contains(m));
+    let is_grid_recipe = matches!(r.kind, RecipeKind::CraftingShaped | RecipeKind::CraftingShapeless);
+    let load = match chosen {
+        Some(m) => sized(m),
+        // A crafting recipe may also fit a press or mixer, and those need far less stress.
+        None if is_grid_recipe => options
+            .iter()
+            .filter(|m| **m != Machine::Hand)
+            .map(|m| sized(*m))
+            .min_by(|a, b| a.su.total_cmp(&b.su))
+            .unwrap_or_else(|| sized(Machine::Hand)),
+        None => sized(options.first().copied().unwrap_or(Machine::Hand)),
+    };
+    (vec![load], options)
 }
 
 fn machine_key(m: Machine) -> String {
