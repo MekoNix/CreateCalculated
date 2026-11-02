@@ -2,7 +2,6 @@
 //!
 //! Textures are not free to redistribute, so nothing this crate produces belongs in the
 //! repository: it only holds the tool, every user generates the pictures locally.
-//! See docs/icons.md.
 
 pub mod assets;
 pub mod entity;

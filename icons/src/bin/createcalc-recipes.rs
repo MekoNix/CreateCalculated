@@ -1,6 +1,6 @@
-//! Downloads what recipes are read from and builds the bundle, see docs/import.md.
+//! Downloads what recipes are read from and builds the bundle.
 
-use createcalc_core::import::import_jars;
+use createcalc_core::import::{add_names, import_jars};
 use createcalc_icons::fetch::Fetcher;
 use std::path::{Path, PathBuf};
 
@@ -56,7 +56,16 @@ fn main() {
     }
 
     let refs: Vec<&Path> = jars.iter().map(PathBuf::as_path).collect();
-    let (bundle, stats) = import_jars(&refs).unwrap_or_else(|e| fail(&e));
+    let (mut bundle, stats) = import_jars(&refs).unwrap_or_else(|e| fail(&e));
+    // Item names fall back to English, so missing translations must not stop the recipes.
+    let russian = fetcher.minecraft_lang(&game, "ru_ru").and_then(|path| {
+        let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&text).map_err(|e| e.to_string())
+    });
+    match russian {
+        Ok(lang_file) => add_names(&mut bundle.names, &lang_file, true),
+        Err(e) => eprintln!("no Russian names for Minecraft items: {e}"),
+    }
     if bundle.recipes.is_empty() {
         fail("no recipes were found in the downloaded files");
     }

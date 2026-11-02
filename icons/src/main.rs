@@ -1,4 +1,4 @@
-//! Builds inventory icons from JARs, see docs/icons.md.
+//! Builds inventory icons from JARs.
 
 use createcalc_core::model::Bundle;
 use createcalc_icons::assets::{peek_jar, Assets};

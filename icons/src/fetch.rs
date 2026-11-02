@@ -27,7 +27,7 @@ fn pick_neoforge(metadata: &str, game: &str) -> Result<String, String> {
         .split("<version>")
         .skip(1)
         .filter_map(|part| part.split('<').next())
-        .filter(|v| number(v).is_some() && jar_file_name(&format!("neoforge-{v}-universal.jar")).is_some())
+        .filter(|v| number(v).is_some() && safe_file_name(&format!("neoforge-{v}-universal.jar")).is_some())
         .max_by_key(|v| number(v))
         .map(String::from)
         .ok_or_else(|| format!("NeoForge has no version for game {game}"))
@@ -78,9 +78,10 @@ fn is_slug(s: &str) -> bool {
 }
 
 /// A file name from an API response, reduced to something safe inside the cache folder.
-fn jar_file_name(name: &str) -> Option<String> {
+fn safe_file_name(name: &str) -> Option<String> {
     let base = name.rsplit(['/', '\\']).next()?;
-    let clean = !base.starts_with('.') && base.ends_with(".jar") && base.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_' | b'.' | b'+'));
+    // The name of a language file cannot match downloads.json, the record kept in this folder.
+    let clean = !base.starts_with('.') && (base.ends_with(".jar") || base.ends_with(".lang.json")) && base.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_' | b'.' | b'+'));
     clean.then(|| base.to_string())
 }
 
@@ -149,7 +150,7 @@ impl Fetcher {
     /// A previous download of this request, if its file is still there and intact.
     fn cached(&self, key: &str) -> Option<PathBuf> {
         let record = self.records.get(key)?;
-        let path = self.dir.join(jar_file_name(record.get("file")?.as_str()?)?);
+        let path = self.dir.join(safe_file_name(record.get("file")?.as_str()?)?);
         let (sha1, sha512) = hash_file(&path).ok()?;
         (record.get("sha1").and_then(Value::as_str) == Some(sha1.as_str()) && record.get("sha512").and_then(Value::as_str) == Some(sha512.as_str())).then_some(path)
     }
@@ -158,7 +159,7 @@ impl Fetcher {
         if !url.starts_with("https://") {
             return Err(format!("{url}: refusing a download that is not https"));
         }
-        let file_name = jar_file_name(file_name).ok_or_else(|| format!("unsafe file name {file_name}"))?;
+        let file_name = safe_file_name(file_name).ok_or_else(|| format!("unsafe file name {file_name}"))?;
         std::fs::create_dir_all(&self.dir).map_err(|e| format!("{}: {e}", self.dir.display()))?;
         let target = self.dir.join(&file_name);
         let part = self.dir.join(format!("{file_name}.part"));
@@ -232,6 +233,38 @@ impl Fetcher {
     }
 
     /// NeoForge, whose JAR holds the common `c:` tags that recipes refer to.
+    /// A language file of the game. Only English is inside the JAR, the others are assets.
+    pub fn minecraft_lang(&mut self, version: &str, lang: &str) -> Result<PathBuf, String> {
+        if !is_slug(version) || !is_slug(lang) {
+            return Err(format!("bad game version or language {version} {lang}"));
+        }
+        let key = format!("minecraft-lang:{version}:{lang}");
+        if let Some(path) = self.cached(&key) {
+            return Ok(path);
+        }
+        let manifest = self.get_json(MANIFEST)?;
+        let entry = manifest
+            .get("versions")
+            .and_then(Value::as_array)
+            .and_then(|list| list.iter().find(|v| v.get("id").and_then(Value::as_str) == Some(version)))
+            .ok_or_else(|| format!("Mojang has no version {version}"))?;
+        let url = entry.get("url").and_then(Value::as_str).ok_or("manifest entry without url")?;
+        let details = self.get_json(url)?;
+        let index = details.pointer("/assetIndex/url").and_then(Value::as_str).ok_or("version without an asset index")?;
+        let assets = self.get_json(index)?;
+        let name = format!("minecraft/lang/{lang}.json");
+        let hash = assets
+            .get("objects")
+            .and_then(|o| o.get(&name))
+            .and_then(|o| o.get("hash"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("the game has no {name}"))?
+            .to_string();
+        let url = format!("https://resources.download.minecraft.net/{}/{hash}", hash.get(..2).ok_or("bad asset hash")?);
+        let expected = Hashes { sha1: Some(hash), sha512: None };
+        self.download(&key, &url, &format!("minecraft-{version}-{lang}.lang.json"), &expected)
+    }
+
     pub fn neoforge(&mut self, game: &str) -> Result<PathBuf, String> {
         if !is_slug(game) {
             return Err(format!("bad game version {game}"));
@@ -307,11 +340,13 @@ mod tests {
 
     #[test]
     fn file_names_from_apis_cannot_leave_the_folder() {
-        assert_eq!(jar_file_name("create-1.21.1-6.0.10.jar").as_deref(), Some("create-1.21.1-6.0.10.jar"));
-        assert_eq!(jar_file_name("../../evil.jar").as_deref(), Some("evil.jar"));
-        assert_eq!(jar_file_name("a b.jar"), None);
-        assert_eq!(jar_file_name(".hidden.jar"), None);
-        assert_eq!(jar_file_name("x.exe"), None);
+        assert_eq!(safe_file_name("create-1.21.1-6.0.10.jar").as_deref(), Some("create-1.21.1-6.0.10.jar"));
+        assert_eq!(safe_file_name("../../evil.jar").as_deref(), Some("evil.jar"));
+        assert_eq!(safe_file_name("a b.jar"), None);
+        assert_eq!(safe_file_name(".hidden.jar"), None);
+        assert_eq!(safe_file_name("x.exe"), None);
+        assert_eq!(safe_file_name("downloads.json"), None);
+        assert_eq!(safe_file_name("minecraft-1.21.1-ru_ru.lang.json").as_deref(), Some("minecraft-1.21.1-ru_ru.lang.json"));
     }
 
     #[test]
