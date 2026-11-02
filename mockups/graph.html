@@ -569,8 +569,7 @@ function statsRows(loads, ownRpm, extraRight){
   const full = Math.max(...loads.map(x => x.count ? x.exact / x.count : 0));
   const su = loads.reduce((s, x) => s + x.su, 0);
   const pct = l.machine === 'hand' ? '' : `<span class="r2 ${full >= .95 ? 'tight' : ''}">загрузка ${Math.ceil(full * 100 - 1e-6)}%</span>`;
-  const blocks = l.stream_blocks ? `<span class="r2" title="Столько блоков ленты должно быть под обдувом у каждого вентилятора, всего ${Math.ceil(l.stream_blocks)}">${Math.ceil(l.stream_blocks / Math.max(l.count, 1))} бл. на вентилятор</span>` : '';
-  return `<div class="stats">${speed}${pct || '<span></span>'}<span>${su ? fmt(su) + ' SU' : '<span class="muted">без SU</span>'}</span>${extraRight || blocks || '<span></span>'}</div>`;
+  return `<div class="stats">${speed}${pct || '<span></span>'}<span>${su ? fmt(su) + ' SU' : '<span class="muted">без SU</span>'}</span>${extraRight || '<span></span>'}</div>`;
 }
 function cardHtml(n){
   const row = (res, rate) => `<div class="head">${itemIcon(res, 24)}<div><div class="t" title="${esc(nameOf(res))}">${esc(nameOf(res))}</div><div class="r">${rateText(res, rate)}</div></div></div>`;
@@ -757,7 +756,7 @@ function nodePanel(n){
       h += `<h3>Партия</h3><div class="seg" id="pBatch">${[1, 4, 16, 64].map(b => `<button data-v="${b}"${b === cur ? ' class="on"' : ''}>${b}</button>`).join('')}</div>`;
     }
     if (n.loads.length > 1) h += `<h3>Шаги сборки</h3>` + n.loads.map((s, i) => `<div class="row">${machineIcon(s.machine, 18)}<span>${i + 1}. ${esc(MACH[s.machine])}</span><span class="d">${fmt(s.su)} SU</span><span class="v p">×${s.count}</span></div>`).join('');
-    if (l.stream_blocks) h += `<h3>Вентилятор</h3><div class="row"><span>Лента под обдувом, всего</span><span class="v p">${fmt(l.stream_blocks)} бл.</span></div><div class="row"><span>Максимум RPM ленты</span><span class="v p">${fmt(l.max_belt_rpm)}</span></div>`;
+    if (l.stream_blocks) h += `<h3>Вентилятор</h3><div class="row"><span>Максимум RPM ленты</span><span class="v p">${fmt(l.max_belt_rpm)}</span></div>`;
     h += `<h3>Входы</h3>${flowRows(ins, 'in') || '<div class="note">Нет</div>'}`;
     h += `<h3>Выходы</h3>${flowRows(outs, 'out') || `<div class="note">Только конечная цель</div>`}`;
     h += `<div class="btns"><button class="btn" id="pStock">Со склада</button><button class="btn" id="pReset">Сбросить</button></div>`;
