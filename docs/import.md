@@ -1,6 +1,19 @@
 # Импорт рецептов
 
-Импорт собирает `data/bundle.json` из JAR на вашем компьютере. Эта папка не попадает в git.
+Рецепты лежат в `data/bundle.json`, эта папка не попадает в git.
+
+## Обычный способ
+
+Запустите сервер: если файла нет, он спросит, скачать ли всё нужное. То же вручную:
+
+```sh
+cargo run --release --bin createcalc-recipes
+cargo run --release --bin createcalc-recipes -- --mod createaddition
+```
+
+Скачивается Minecraft от Mojang, NeoForge из его репозитория Maven, Create и указанные моды с Modrinth, с проверкой контрольных сумм. Файлы хранятся в `data/jars/` и только читаются как архивы. Без `--update` повторный запуск обходится без сети. Без терминала сервер ничего не спрашивает и останавливается с подсказкой.
+
+## Из своих файлов
 
 ```sh
 cargo run --release --bin createcalc-import -- -o data/bundle.json <minecraft.jar> <neoforge-universal.jar> <create.jar>

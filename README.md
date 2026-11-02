@@ -16,15 +16,17 @@
 Нужен [Rust](https://rustup.rs) и C-компилятор: он нужен инструменту картинок для HTTPS. Один сервер собирается и без него: `cargo build -p createcalc-server`. Рецепты в репозитории не хранятся, их один раз собирают из своих JAR, см. [docs/import.md](docs/import.md).
 
 ```sh
-cargo run --release --bin createcalc-import -- -o data/bundle.json minecraft.jar neoforge-universal.jar create.jar
 cargo run --release --bin createcalc-server
-cargo test --workspace
 ```
 
-Картинки предметов необязательны, без них страница показывает буквы. Если их нет, сервер при запуске спросит, скачать ли Minecraft и Create и собрать картинки. Если отказаться, вопрос больше не появится, а запустить установку можно и вручную:
+Этого достаточно. Сервер откроется на http://127.0.0.1:3000/, а если рецептов и картинок ещё нет, он спросит, скачать ли нужные файлы и собрать их. Всё остаётся только на вашем компьютере. Рецепты обязательны, картинки нет: без них страница показывает буквы.
+
+То же можно запустить вручную, например чтобы добавить аддон:
 
 ```sh
-cargo run --release --bin createcalc-icons
+cargo run --release --bin createcalc-recipes -- --mod createaddition
+cargo run --release --bin createcalc-icons -- --mod createaddition
+cargo test --workspace
 ```
 
 Документация: [как работает расчёт](docs/architecture.md), [формулы машин](docs/formulas.md), [API](docs/api.md), [картинки предметов](docs/icons.md).

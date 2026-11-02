@@ -13,7 +13,7 @@ use createcalc_core::model::{Bundle, Catalog};
 use createcalc_core::plan::{consumers, plan, producers, Plan, PlanError, PlanRequest};
 use createcalc_core::power::{plan_power, PowerPlan};
 use serde::{Deserialize, Serialize};
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::IsTerminal;
 use std::path::{Path as FsPath, PathBuf};
 use std::process::Command;
@@ -162,18 +162,57 @@ fn app(cat: Shared, icons: PathBuf) -> Router {
         .layer(CorsLayer::permissive())
 }
 
-/// How to run the picture tool: the binary next to this one if it was built, otherwise through
-/// cargo, because `cargo run --bin createcalc-server` builds only the server.
-fn icons_command(exe_dir: Option<&FsPath>) -> (OsString, Vec<&'static str>) {
-    let sibling = exe_dir.map(|d| d.join(format!("createcalc-icons{}", std::env::consts::EXE_SUFFIX)));
+/// How to run one of the setup tools: the binary next to this one if it was built, otherwise
+/// through cargo, because `cargo run --bin createcalc-server` builds only the server.
+fn tool_command(tool: &str, exe_dir: Option<&FsPath>) -> (OsString, Vec<String>) {
+    let sibling = exe_dir.map(|d| d.join(format!("{tool}{}", std::env::consts::EXE_SUFFIX)));
     match sibling {
         Some(file) if file.is_file() => (file.into_os_string(), vec![]),
-        _ => ("cargo".into(), vec!["run", "--release", "--bin", "createcalc-icons", "--"]),
+        _ => ("cargo".into(), ["run", "--release", "--bin", tool, "--"].map(String::from).to_vec()),
     }
 }
 
-/// Offers to build the pictures when there are none. Only a person at a terminal is asked,
-/// and a refusal is remembered so the question does not come back on every start.
+/// Runs a setup tool, handing it the terminal. Returns whether it succeeded.
+fn run_tool(tool: &str, args: &[&OsStr]) -> bool {
+    let exe = std::env::current_exe().ok();
+    let (program, first) = tool_command(tool, exe.as_deref().and_then(FsPath::parent));
+    matches!(Command::new(program).args(first).args(args).status(), Ok(s) if s.success())
+}
+
+fn is_yes(answer: &str) -> bool {
+    matches!(answer.trim().to_lowercase().as_str(), "" | "y" | "yes" | "д" | "да")
+}
+
+/// Asks at the terminal, the default being yes. Without a terminal nobody is there to answer.
+fn ask(question: &str) -> bool {
+    if !std::io::stdin().is_terminal() {
+        return false;
+    }
+    println!("{question} [Y/n]");
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer).is_ok() && is_yes(&answer)
+}
+
+/// The server cannot work without recipes, so it offers to build them or stops.
+fn ensure_bundle(path: &str) {
+    if FsPath::new(path).is_file() {
+        return;
+    }
+    let hint = "Собрать рецепты: cargo run --release --bin createcalc-recipes, подробнее в docs/import.md";
+    println!("Рецептов нет: {path} не найден.");
+    let question = "Скачать Minecraft, NeoForge и Create (примерно 60 МБ) и собрать рецепты сейчас? Файлы останутся только на этом компьютере.";
+    if !ask(question) {
+        eprintln!("{hint}");
+        std::process::exit(1);
+    }
+    if !run_tool("createcalc-recipes", &[OsStr::new("--out"), OsStr::new(path)]) || !FsPath::new(path).is_file() {
+        eprintln!("Рецепты не собрались. {hint}");
+        std::process::exit(1);
+    }
+}
+
+/// Offers to build the pictures when there are none. They are optional, so a refusal is
+/// remembered and the question does not come back on every start.
 fn offer_icons(icons: &FsPath, bundle: &str) {
     let declined = icons.join(".no-install-prompt");
     if icons.join("index.json").is_file() {
@@ -185,19 +224,15 @@ fn offer_icons(icons: &FsPath, bundle: &str) {
         return;
     }
     println!("Картинок предметов нет, на странице будут буквы.");
-    println!("Скачать Minecraft и Create (примерно 50 МБ) и собрать картинки сейчас? Они останутся только на этом компьютере. [Y/n]");
-    let mut answer = String::new();
-    if std::io::stdin().read_line(&mut answer).is_err() || !matches!(answer.trim().to_lowercase().as_str(), "" | "y" | "yes" | "д" | "да") {
+    if !ask("Скачать Minecraft и Create (примерно 50 МБ) и собрать картинки сейчас? Они останутся только на этом компьютере.") {
         if std::fs::create_dir_all(icons).and_then(|()| std::fs::write(&declined, "")).is_err() {
             eprintln!("не удалось запомнить ответ, вопрос повторится при следующем запуске");
         }
         println!("{hint}");
         return;
     }
-    let exe = std::env::current_exe().ok();
-    let (program, args) = icons_command(exe.as_deref().and_then(FsPath::parent));
-    let status = Command::new(program).args(args).arg("--out").arg(icons).arg("--bundle").arg(bundle).status();
-    if !matches!(status, Ok(s) if s.success()) {
+    let args = [OsStr::new("--out"), icons.as_os_str(), OsStr::new("--bundle"), OsStr::new(bundle)];
+    if !run_tool("createcalc-icons", &args) {
         eprintln!("Картинки не собрались, сервер запустится с буквами. {hint}");
     }
 }
@@ -208,8 +243,9 @@ async fn main() {
     let path = args.next().unwrap_or_else(|| "data/bundle.json".into());
     let address = args.next().unwrap_or_else(|| "127.0.0.1:3000".into());
     let icons = PathBuf::from(args.next().unwrap_or_else(|| "data/icons".into()));
+    ensure_bundle(&path);
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| {
-        eprintln!("cannot read {path}: {e}. Build it first, see docs/import.md");
+        eprintln!("cannot read {path}: {e}");
         std::process::exit(1)
     });
     let bundle: Bundle = serde_json::from_str(&text).unwrap_or_else(|e| {
@@ -234,20 +270,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn picture_tool_is_found_next_to_the_server_or_through_cargo() {
+    fn tools_are_found_next_to_the_server_or_through_cargo() {
         let folder = std::env::temp_dir().join(format!("createcalc-tool-test-{}", std::process::id()));
         std::fs::create_dir_all(&folder).unwrap();
-        let (program, args) = icons_command(Some(&folder));
+        let (program, args) = tool_command("createcalc-recipes", Some(&folder));
         assert_eq!(program, "cargo");
-        assert!(args.contains(&"createcalc-icons"));
-        assert_eq!(icons_command(None).0, "cargo");
+        assert!(args.iter().any(|a| a == "createcalc-recipes"));
+        assert_eq!(tool_command("createcalc-icons", None).0, "cargo");
 
-        let tool = folder.join(format!("createcalc-icons{}", std::env::consts::EXE_SUFFIX));
+        let tool = folder.join(format!("createcalc-recipes{}", std::env::consts::EXE_SUFFIX));
         std::fs::write(&tool, "").unwrap();
-        let (program, args) = icons_command(Some(&folder));
+        let (program, args) = tool_command("createcalc-recipes", Some(&folder));
         assert_eq!(program, tool.into_os_string());
         assert!(args.is_empty());
+        assert_eq!(tool_command("createcalc-icons", Some(&folder)).0, "cargo");
         std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    #[test]
+    fn answers() {
+        for yes in ["", "y", "Y", "yes", "д", "Да", " y\n"] {
+            assert!(is_yes(yes), "{yes}");
+        }
+        for no in ["n", "no", "нет", "x"] {
+            assert!(!is_yes(no), "{no}");
+        }
     }
 
     #[test]

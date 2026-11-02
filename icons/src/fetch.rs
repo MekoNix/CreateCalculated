@@ -1,4 +1,5 @@
-//! Downloads the game's client JAR from Mojang and mods from Modrinth into a local cache.
+//! Downloads the game's client JAR from Mojang, NeoForge from its Maven repository and mods
+//! from Modrinth into a local cache.
 //! Every file is checked against the hashes those APIs publish. The JARs are data for
 //! the renderer and are never run.
 
@@ -13,9 +14,24 @@ use std::time::Duration;
 
 const MANIFEST: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const MODRINTH: &str = "https://api.modrinth.com/v2";
+const NEOFORGE: &str = "https://maven.neoforged.net/releases/net/neoforged/neoforge";
 const USER_AGENT: &str = concat!("MekoNix/CreateCalculated/", env!("CARGO_PKG_VERSION"), " (github.com/MekoNix/CreateCalculated)");
 const MAX_JSON: u64 = 64 * 1024 * 1024;
 const MAX_JAR: u64 = 1024 * 1024 * 1024;
+
+/// The newest stable NeoForge for a game version in Maven metadata. Game 1.21.1 maps to 21.1.x.
+fn pick_neoforge(metadata: &str, game: &str) -> Result<String, String> {
+    let prefix = format!("{}.", game.strip_prefix("1.").ok_or_else(|| format!("no NeoForge scheme for game {game}"))?);
+    let number = |v: &str| v.strip_prefix(&prefix)?.parse::<u64>().ok();
+    metadata
+        .split("<version>")
+        .skip(1)
+        .filter_map(|part| part.split('<').next())
+        .filter(|v| number(v).is_some() && jar_file_name(&format!("neoforge-{v}-universal.jar")).is_some())
+        .max_by_key(|v| number(v))
+        .map(String::from)
+        .ok_or_else(|| format!("NeoForge has no version for game {game}"))
+}
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct Hashes {
@@ -121,10 +137,13 @@ impl Fetcher {
         std::fs::write(self.dir.join("downloads.json"), text).map_err(|e| format!("downloads.json: {e}"))
     }
 
-    fn get_json(&self, url: &str) -> Result<Value, String> {
+    fn get_text(&self, url: &str) -> Result<String, String> {
         let mut response = self.agent.get(url).call().map_err(|e| format!("{url}: {e}"))?;
-        let text = response.body_mut().with_config().limit(MAX_JSON).read_to_string().map_err(|e| format!("{url}: {e}"))?;
-        serde_json::from_str(&text).map_err(|e| format!("{url}: {e}"))
+        response.body_mut().with_config().limit(MAX_JSON).read_to_string().map_err(|e| format!("{url}: {e}"))
+    }
+
+    fn get_json(&self, url: &str) -> Result<Value, String> {
+        serde_json::from_str(&self.get_text(url)?).map_err(|e| format!("{url}: {e}"))
     }
 
     /// A previous download of this request, if its file is still there and intact.
@@ -212,6 +231,25 @@ impl Fetcher {
         self.download(&key, &url, &format!("minecraft-{version}-client.jar"), &expected)
     }
 
+    /// NeoForge, whose JAR holds the common `c:` tags that recipes refer to.
+    pub fn neoforge(&mut self, game: &str) -> Result<PathBuf, String> {
+        if !is_slug(game) {
+            return Err(format!("bad game version {game}"));
+        }
+        let key = format!("neoforge:{game}");
+        if !self.update {
+            if let Some(path) = self.cached(&key) {
+                return Ok(path);
+            }
+        }
+        let version = pick_neoforge(&self.get_text(&format!("{NEOFORGE}/maven-metadata.xml"))?, game)?;
+        println!("neoforge: version {version}");
+        let file_name = format!("neoforge-{version}-universal.jar");
+        let url = format!("{NEOFORGE}/{version}/{file_name}");
+        let sha1 = self.get_text(&format!("{url}.sha1"))?.trim().to_string();
+        self.download(&key, &url, &file_name, &Hashes { sha1: Some(sha1), sha512: None })
+    }
+
     /// A mod from Modrinth, `slug` or `slug@version`.
     pub fn modrinth(&mut self, spec: &str, game: &str, loader: &str) -> Result<PathBuf, String> {
         let (slug, pin) = match spec.split_once('@') {
@@ -249,6 +287,16 @@ mod tests {
         assert!(check_hashes("x", &hashes("ab", "cd"), "00", "cd").unwrap_err().contains("sha1"));
         assert!(check_hashes("x", &hashes("ab", "cd"), "ab", "00").unwrap_err().contains("sha512"));
         assert!(check_hashes("x", &Hashes::default(), "ab", "cd").is_err());
+    }
+
+    #[test]
+    fn neoforge_version_is_the_newest_stable_for_the_game() {
+        let xml = "<versions><version>21.1.9</version><version>21.1.265</version><version>21.1.100</version>\
+            <version>21.1.300-beta</version><version>21.4.1</version><version>20.1.5</version></versions>";
+        assert_eq!(pick_neoforge(xml, "1.21.1").unwrap(), "21.1.265");
+        assert_eq!(pick_neoforge(xml, "1.21.4").unwrap(), "21.4.1");
+        assert!(pick_neoforge(xml, "1.19.2").is_err());
+        assert!(pick_neoforge(xml, "26.1").is_err());
     }
 
     #[test]

@@ -11,6 +11,10 @@ name = "createcalc_icons"
 name = "createcalc-icons"
 path = "src/main.rs"
 
+[[bin]]
+name = "createcalc-recipes"
+path = "src/bin/createcalc-recipes.rs"
+
 [dependencies]
 createcalc-core = { path = "../core" }
 serde_json.workspace = true
