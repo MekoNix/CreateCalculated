@@ -1,0 +1,16 @@
+[Unit]
+Description=CreateCalculated, a production calculator for the Create mod
+After=network.target
+
+[Service]
+User=createcalc
+WorkingDirectory=@PREFIX@
+ExecStart=@PREFIX@/createcalc-server data/bundle.json @ADDRESS@ data/icons
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
