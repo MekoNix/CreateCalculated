@@ -475,7 +475,7 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
         sources: sources.iter().map(|(r, &v)| ((*r).clone(), solution.value(v))).collect(),
         surplus: surplus.iter().map(|(r, &v)| ((*r).clone(), solution.value(v))).collect(),
         conversions: conversions.iter().map(|(k, &v)| (k.clone(), solution.value(v))).collect(),
-    }, &allowed, &stock, &base)
+    }, &stock, &base)
 }
 
 struct Solved {
@@ -521,7 +521,7 @@ fn machine_key(m: Machine) -> String {
     serde_json::to_value(m).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
 }
 
-fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, allowed: &HashSet<usize>, stock: &HashSet<&str>, base: &HashMap<ResId, Origin>) -> Result<Plan, PlanError> {
+fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, stock: &HashSet<&str>, base: &HashMap<ResId, Origin>) -> Result<Plan, PlanError> {
     let mut nodes = Vec::new();
     let mut suppliers: BTreeMap<ResId, Vec<(String, f64)>> = BTreeMap::new();
     let mut consumers: BTreeMap<ResId, Vec<(String, f64)>> = BTreeMap::new();
