@@ -16,3 +16,4 @@ serde.workspace = true
 serde_json.workspace = true
 toml = "0.8"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+good_lp = { version = "1", default-features = false, features = ["microlp"] }

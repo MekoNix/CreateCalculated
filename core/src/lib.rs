@@ -4,3 +4,5 @@ pub mod config;
 pub mod import;
 pub mod machines;
 pub mod model;
+pub mod plan;
+pub mod power;
