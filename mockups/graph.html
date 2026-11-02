@@ -95,6 +95,21 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 .note{color:var(--dim);font-size:10.5px;margin-top:4px}
 .warn{color:var(--red);font-size:11px;margin:3px 0}
 /* Bottom */
+#side{position:fixed;left:12px;top:56px;width:290px;max-height:calc(100vh - 118px);overflow:auto;background:#17191d;border:1px solid var(--line2);border-radius:8px;z-index:4}
+#side details+details{border-top:1px solid var(--line)}
+#side summary{list-style:none;cursor:pointer;padding:10px 12px;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center;user-select:none}
+#side summary::-webkit-details-marker{display:none}
+#side summary::after{content:"\25BE";color:var(--dim)}
+#side details:not([open]) summary::after{content:"\25B8"}
+#side summary:hover{background:#1f2227}
+#side .sb{padding:0 12px 12px}
+#side h3{font-size:11px;font-weight:400;color:var(--dim);margin:10px 0 4px}
+#side .line{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:30px;font-size:12px}
+#side .chk.line{justify-content:flex-start}
+#side .inp{width:70px}
+#side .seg button{padding:0 8px}
+.btn.file{display:inline-flex;align-items:center;font-size:12px}
+.btn.file input{display:none}
 #status{position:fixed;left:12px;bottom:10px;color:var(--dim);z-index:3;max-width:60%}
 #status.err{color:var(--red)}
 #zoom{position:fixed;left:12px;bottom:32px;display:flex;gap:4px;z-index:3;align-items:center;color:var(--dim)}
@@ -107,13 +122,37 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 <header id="bar">
   <div id="searchWrap"><span id="searchIcon"></span><input id="search" class="inp" placeholder="Что производить" autocomplete="off" spellcheck="false" aria-label="Цель"><div id="sugg"></div></div>
   <label class="fld"><input id="per" class="inp" type="number" min="0.01" step="any" style="width:64px"> в минуту</label>
-  <label class="fld"><input id="rpm" class="inp" type="number" min="1" max="256" step="any" style="width:58px"> RPM</label>
+  <label class="fld"><input id="rpm" class="inp" type="number" min="1" step="any" style="width:58px"> RPM</label>
   <div class="seg" id="mode"><button data-v="normal">Обычный</button><button data-v="full_auto">Полная автоматизация</button></div>
-  <label class="fld"><input id="belt" class="inp" type="number" min="1" max="256" step="any" style="width:58px"> RPM лент</label>
-  <label class="chk"><input id="heat" type="checkbox"> Нагрев</label>
-  <button id="buildBtn" class="btn">Материалы</button>
   <button id="totals" title="Нагрузка и здания"></button>
 </header>
+<aside id="side">
+  <details id="sMat" open><summary>Материалы</summary><div class="sb">
+    <h3>Что построить</h3><div id="matBuild"></div>
+    <h3>Материалы на всю постройку</h3><div id="matRaw"></div>
+    <div class="note">Лента указана по числу линий. Валы, трубы, насосы и источники энергии не входят.</div>
+    <div class="btns"><button class="btn" id="bCopy">Скопировать</button></div><div class="note" id="bNote"></div>
+  </div></details>
+  <details id="sSet"><summary>Настройки</summary><div class="sb">
+    <h3>Схема</h3>
+    <label class="chk line"><input id="heat" type="checkbox"> Нагрев: бёрнеры и топливо</label>
+    <label class="fld line"><span>RPM лент</span><input id="belt" class="inp" type="number" min="1" step="any"></label>
+    <div class="fld line"><span>Партия дробилки и вентилятора</span><div class="seg" id="dBatch"></div></div>
+    <div class="fld line"><span>Стопка на ленте</span><div class="seg" id="dStack"></div></div>
+    <label class="fld line"><span>Парусов на мельницу</span><input id="cSails" class="inp" type="number" min="8" step="8"></label>
+    <h3>Конфиг Create</h3>
+    <label class="fld line"><span>Предел RPM</span><input id="cMax" class="inp" type="number" min="1" step="any"></label>
+    <label class="fld line"><span>Время вентилятора, тиков</span><input id="cFan" class="inp" type="number" min="1" step="1"></label>
+    <label class="chk line"><input id="cBulkPress" type="checkbox"> Пресс берёт стопку целиком</label>
+    <label class="chk line"><input id="cBulkCut" type="checkbox"> Пила берёт стопку целиком</label>
+    <label class="chk line"><input id="cSquare" type="checkbox"> Квадратные рецепты в прессе</label>
+    <label class="chk line"><input id="cShapeless" type="checkbox"> Бесформенные рецепты в миксере</label>
+    <label class="chk line"><input id="cCrafter" type="checkbox"> Обычный крафт в крафтере</label>
+    <label class="chk line"><input id="cStone" type="checkbox"> Камнерез на пиле</label>
+    <div class="btns"><label class="btn file">Загрузить create-server.toml<input id="cFile" type="file" accept=".toml"></label><button class="btn" id="cReset">Сбросить</button></div>
+    <div class="note" id="cNote">Значения Create по умолчанию.</div>
+  </div></details>
+</aside>
 <aside id="panel"><button id="close" aria-label="Закрыть">&times;</button><div id="panelBody"></div></aside>
 <div id="zoom"><button id="zOut" aria-label="Отдалить">&minus;</button><button id="zIn" aria-label="Приблизить">+</button><button id="zFit">Вписать</button></div>
 <div id="status"></div>
@@ -122,12 +161,12 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 const API = 'http://127.0.0.1:3000';
 const W = 260, GAP_X = 104, GAP_Y = 30, DUMMY_H = 40;
 /* Snapshot of one real server response (andesite alloy, 60/min, full_auto). */
-const SNAP = /*SNAP*/{"plan":{"nodes":[{"id":"recipe:create:compacting/andesite_from_flint","type":"recipe","recipe":"create:compacting/andesite_from_flint","produces":"minecraft:andesite","runs_per_min":60.000000000000036,"loads":[{"machine":"press","rpm":256.0,"ticks":10,"items_per_op":1,"exact":0.5000000000000003,"count":1,"su":2048.0}],"heat":"none","burners":0,"alternatives":["create:andesite_from_stone_types_andesite_stonecutting","minecraft:andesite"],"machine_options":["press"]},{"id":"recipe:create:milling/cobblestone","type":"recipe","recipe":"create:milling/cobblestone","produces":"minecraft:gravel","runs_per_min":540.0000000000002,"loads":[{"machine":"millstone","rpm":256.0,"ticks":16,"items_per_op":1,"exact":7.200000000000003,"count":8,"su":8192.0}],"heat":"none","burners":0,"alternatives":[],"machine_options":["millstone","crushing_wheels"]},{"id":"recipe:create:mixing/andesite_alloy","type":"recipe","recipe":"create:mixing/andesite_alloy","produces":"create:andesite_alloy","runs_per_min":59.99999999999998,"loads":[{"machine":"mixer","rpm":256.0,"ticks":16,"items_per_op":1,"exact":0.7999999999999997,"count":1,"su":1024.0}],"heat":"none","burners":0,"alternatives":["create:crafting/materials/andesite_alloy","create:crafting/materials/andesite_alloy_from_block","create:crafting/materials/andesite_alloy_from_zinc","create:mixing/andesite_alloy_from_zinc","create:sequenced_assembly/precision_mechanism"],"machine_options":["mixer"]},{"id":"recipe:create:splashing/gravel","type":"recipe","recipe":"create:splashing/gravel","produces":"minecraft:flint","runs_per_min":480.00000000000017,"loads":[{"machine":"fan","rpm":256.0,"ticks":151,"items_per_op":1,"exact":3.020000000000001,"count":4,"su":2048.0,"stream_blocks":60.40000000000002,"max_belt_rpm":63.576158940397356}],"heat":"none","burners":0,"alternatives":["create:crushing/tuff","create:crushing/tuff_recycling","create:milling/gravel","create:crushing/gravel"],"machine_options":["fan"]},{"id":"generate:fluid:minecraft:lava","type":"generate","res":"fluid:minecraft:lava","per_minute":6000.000000000002,"load":null},{"id":"generate:minecraft:cobblestone","type":"generate","res":"minecraft:cobblestone","per_minute":540.0000000000002,"load":{"machine":"drill","rpm":256.0,"ticks":11,"items_per_op":1,"exact":4.950000000000002,"count":5,"su":5120.0}},{"id":"target:create:andesite_alloy","type":"target","res":"create:andesite_alloy","per_minute":60.0}],"edges":[{"from":"generate:fluid:minecraft:lava","to":"recipe:create:compacting/andesite_from_flint","res":"fluid:minecraft:lava","per_minute":6000.000000000003},{"from":"generate:minecraft:cobblestone","to":"recipe:create:milling/cobblestone","res":"minecraft:cobblestone","per_minute":540.0000000000002,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":216.00000000000009,"funnels":4,"needs_buffer":false}},{"from":"recipe:create:compacting/andesite_from_flint","to":"recipe:create:mixing/andesite_alloy","res":"minecraft:andesite","per_minute":59.99999999999998,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":23.999999999999993,"funnels":1,"needs_buffer":false}},{"from":"recipe:create:milling/cobblestone","to":"recipe:create:compacting/andesite_from_flint","res":"minecraft:gravel","per_minute":60.000000000000036,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":24.000000000000014,"funnels":1,"needs_buffer":false}},{"from":"recipe:create:milling/cobblestone","to":"recipe:create:splashing/gravel","res":"minecraft:gravel","per_minute":480.00000000000017,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":192.00000000000006,"funnels":4,"needs_buffer":false}},{"from":"recipe:create:mixing/andesite_alloy","to":"target:create:andesite_alloy","res":"create:andesite_alloy","per_minute":60.0,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":24.0,"funnels":1,"needs_buffer":false}},{"from":"recipe:create:splashing/gravel","to":"recipe:create:compacting/andesite_from_flint","res":"minecraft:flint","per_minute":120.00000000000009,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":48.000000000000036,"funnels":1,"needs_buffer":false}},{"from":"recipe:create:splashing/gravel","to":"recipe:create:mixing/andesite_alloy","res":"minecraft:iron_nugget","per_minute":59.99999999999998,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":23.999999999999993,"funnels":1,"needs_buffer":false}}],"total_su":18432.0,"machines":{"drill":5,"fan":4,"millstone":8,"mixer":1,"press":1},"heat":{"burners_heated":0,"burners_superheated":0,"coal_per_min":0.0,"cake_per_min":0.0},"warnings":[],"manual":[],"build":[{"item":"create:andesite_funnel","count":13},{"item":"create:basin","count":2},{"item":"create:belt_connector","count":7},{"item":"create:encased_fan","count":4},{"item":"create:mechanical_drill","count":5},{"item":"create:mechanical_mixer","count":1},{"item":"create:mechanical_press","count":1},{"item":"create:millstone","count":8}]},"recipes":{"create:compacting/andesite_from_flint":{"kind":"compacting","inputs":[{"amount":2.0,"res":"minecraft:flint"},{"amount":1.0,"res":"minecraft:gravel"},{"amount":100.0,"res":"fluid:minecraft:lava"}],"outputs":[{"amount":1.0,"chance":1.0,"res":"minecraft:andesite"}]},"create:milling/cobblestone":{"kind":"milling","inputs":[{"amount":1.0,"res":"minecraft:cobblestone"}],"outputs":[{"amount":1.0,"chance":1.0,"res":"minecraft:gravel"}]},"create:mixing/andesite_alloy":{"kind":"mixing","inputs":[{"amount":1.0,"res":"minecraft:andesite"},{"amount":1.0,"res":"#c:nuggets/iron"}],"outputs":[{"amount":1.0,"chance":1.0,"res":"create:andesite_alloy"}]},"create:splashing/gravel":{"kind":"splashing","inputs":[{"amount":1.0,"res":"minecraft:gravel"}],"outputs":[{"amount":1.0,"chance":0.25,"res":"minecraft:flint"},{"amount":1.0,"chance":0.125,"res":"minecraft:iron_nugget"}]}},"names":{"create:andesite_alloy":"Andesite Alloy","fluid:minecraft:lava":"fluid:minecraft:lava","minecraft:andesite":"Andesite","minecraft:cobblestone":"Cobblestone","minecraft:flint":"Flint","minecraft:gravel":"Gravel","minecraft:iron_nugget":"Iron Nugget"},"power":{"su":18432.0,"boilers":{"levels":2,"engines":2,"tank_blocks":8,"water_mb_per_tick":20,"burners_kindled":2,"burners_seething":1},"sources":[{"id":"water_wheel","su_each":256.0,"count":72},{"id":"large_water_wheel","su_each":512.0,"count":36},{"id":"windmill_bearing","su_each":4096.0,"count":5},{"id":"steam_engine_level","su_each":16384.0,"count":2}]}}/*END*/;
+const SNAP = /*SNAP*/{"plan":{"nodes":[{"id":"recipe:create:compacting/andesite_from_flint","type":"recipe","recipe":"create:compacting/andesite_from_flint","produces":"minecraft:andesite","runs_per_min":60.000000000000036,"loads":[{"machine":"press","rpm":256.0,"ticks":10,"items_per_op":1,"exact":0.5000000000000003,"count":1,"su":2048.0}],"heat":"none","burners":0,"alternatives":["create:andesite_from_stone_types_andesite_stonecutting","minecraft:andesite"],"machine_options":["press"]},{"id":"recipe:create:milling/cobblestone","type":"recipe","recipe":"create:milling/cobblestone","produces":"minecraft:gravel","runs_per_min":540.0000000000002,"loads":[{"machine":"millstone","rpm":256.0,"ticks":16,"items_per_op":1,"exact":7.200000000000003,"count":8,"su":8192.0}],"heat":"none","burners":0,"alternatives":[],"machine_options":["millstone","crushing_wheels"]},{"id":"recipe:create:mixing/andesite_alloy","type":"recipe","recipe":"create:mixing/andesite_alloy","produces":"create:andesite_alloy","runs_per_min":59.99999999999998,"loads":[{"machine":"mixer","rpm":256.0,"ticks":16,"items_per_op":1,"exact":0.7999999999999997,"count":1,"su":1024.0}],"heat":"none","burners":0,"alternatives":["create:crafting/materials/andesite_alloy","create:crafting/materials/andesite_alloy_from_block","create:crafting/materials/andesite_alloy_from_zinc","create:mixing/andesite_alloy_from_zinc","create:sequenced_assembly/precision_mechanism"],"machine_options":["mixer"]},{"id":"recipe:create:splashing/gravel","type":"recipe","recipe":"create:splashing/gravel","produces":"minecraft:flint","runs_per_min":480.00000000000017,"loads":[{"machine":"fan","rpm":256.0,"ticks":151,"items_per_op":1,"exact":3.020000000000001,"count":4,"su":2048.0,"stream_blocks":60.40000000000002,"max_belt_rpm":63.576158940397356}],"heat":"none","burners":0,"alternatives":["create:crushing/tuff","create:crushing/tuff_recycling","create:milling/gravel","create:crushing/gravel"],"machine_options":["fan"]},{"id":"generate:fluid:minecraft:lava","type":"generate","res":"fluid:minecraft:lava","per_minute":6000.000000000002,"load":null},{"id":"generate:minecraft:cobblestone","type":"generate","res":"minecraft:cobblestone","per_minute":540.0000000000002,"load":{"machine":"drill","rpm":256.0,"ticks":11,"items_per_op":1,"exact":4.950000000000002,"count":5,"su":5120.0}},{"id":"target:create:andesite_alloy","type":"target","res":"create:andesite_alloy","per_minute":60.0}],"edges":[{"from":"generate:fluid:minecraft:lava","to":"recipe:create:compacting/andesite_from_flint","res":"fluid:minecraft:lava","per_minute":6000.000000000003},{"from":"generate:minecraft:cobblestone","to":"recipe:create:milling/cobblestone","res":"minecraft:cobblestone","per_minute":540.0000000000002,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":216.00000000000009,"funnels":4,"needs_buffer":false}},{"from":"recipe:create:compacting/andesite_from_flint","to":"recipe:create:mixing/andesite_alloy","res":"minecraft:andesite","per_minute":59.99999999999998,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":23.999999999999993,"funnels":1,"needs_buffer":false}},{"from":"recipe:create:milling/cobblestone","to":"recipe:create:compacting/andesite_from_flint","res":"minecraft:gravel","per_minute":60.000000000000036,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":24.000000000000014,"funnels":1,"needs_buffer":false}},{"from":"recipe:create:milling/cobblestone","to":"recipe:create:splashing/gravel","res":"minecraft:gravel","per_minute":480.00000000000017,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":192.00000000000006,"funnels":4,"needs_buffer":false}},{"from":"recipe:create:mixing/andesite_alloy","to":"target:create:andesite_alloy","res":"create:andesite_alloy","per_minute":60.0,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":24.0,"funnels":1,"needs_buffer":false}},{"from":"recipe:create:splashing/gravel","to":"recipe:create:compacting/andesite_from_flint","res":"minecraft:flint","per_minute":120.00000000000009,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":48.000000000000036,"funnels":1,"needs_buffer":false}},{"from":"recipe:create:splashing/gravel","to":"recipe:create:mixing/andesite_alloy","res":"minecraft:iron_nugget","per_minute":59.99999999999998,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":23.999999999999993,"funnels":1,"needs_buffer":false}}],"total_su":18432.0,"machines":{"drill":5,"fan":4,"millstone":8,"mixer":1,"press":1},"heat":{"burners_heated":0,"burners_superheated":0,"coal_per_min":0.0,"cake_per_min":0.0},"warnings":[],"manual":[],"build":[{"item":"create:andesite_funnel","count":13},{"item":"create:basin","count":2},{"item":"create:belt_connector","count":7},{"item":"create:encased_fan","count":4},{"item":"create:mechanical_drill","count":5},{"item":"create:mechanical_mixer","count":1},{"item":"create:mechanical_press","count":1},{"item":"create:millstone","count":8}]},"recipes":{"create:compacting/andesite_from_flint":{"kind":"compacting","inputs":[{"amount":2.0,"res":"minecraft:flint"},{"amount":1.0,"res":"minecraft:gravel"},{"amount":100.0,"res":"fluid:minecraft:lava"}],"outputs":[{"amount":1.0,"chance":1.0,"res":"minecraft:andesite"}]},"create:milling/cobblestone":{"kind":"milling","inputs":[{"amount":1.0,"res":"minecraft:cobblestone"}],"outputs":[{"amount":1.0,"chance":1.0,"res":"minecraft:gravel"}]},"create:mixing/andesite_alloy":{"kind":"mixing","inputs":[{"amount":1.0,"res":"minecraft:andesite"},{"amount":1.0,"res":"#c:nuggets/iron"}],"outputs":[{"amount":1.0,"chance":1.0,"res":"create:andesite_alloy"}]},"create:splashing/gravel":{"kind":"splashing","inputs":[{"amount":1.0,"res":"minecraft:gravel"}],"outputs":[{"amount":1.0,"chance":0.25,"res":"minecraft:flint"},{"amount":1.0,"chance":0.125,"res":"minecraft:iron_nugget"}]}},"names":{"create:andesite_alloy":"Andesite Alloy","fluid:minecraft:lava":"fluid:minecraft:lava","minecraft:andesite":"Andesite","minecraft:cobblestone":"Cobblestone","minecraft:flint":"Flint","minecraft:gravel":"Gravel","minecraft:iron_nugget":"Iron Nugget","create:andesite_funnel":"Andesite Funnel","create:basin":"Basin","create:belt_connector":"Mechanical Belt","create:encased_fan":"Encased Fan","create:mechanical_drill":"Mechanical Drill","create:mechanical_mixer":"Mechanical Mixer","create:mechanical_press":"Mechanical Press","create:millstone":"Millstone"},"power":{"su":18432.0,"boilers":{"levels":2,"engines":2,"tank_blocks":8,"water_mb_per_tick":20,"burners_kindled":2,"burners_seething":1},"sources":[{"id":"water_wheel","su_each":256.0,"count":72},{"id":"large_water_wheel","su_each":512.0,"count":36},{"id":"windmill_bearing","su_each":4096.0,"count":5},{"id":"steam_engine_level","su_each":16384.0,"count":2}]}}/*END*/;
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-const S = {belt:null, stacks:{}, item:'create:andesite_alloy', itemName:'', per:60, rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
+const S = {batch:1, stack:1, sails:64, config:null, belt:null, stacks:{}, item:'create:andesite_alloy', itemName:'', per:60, rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
 const items = new Map();
 const recipes = new Map();
 let itemsLoaded = false, plan = null, power = null, offline = false, seq = 0;
@@ -215,7 +254,7 @@ function loadRecipe(id){
   return api('/api/recipes/' + encodeURI(id)).then(r => (recipes.set(id, r), r));
 }
 function request(){
-  return {targets:[{item:S.item, per_minute:S.per}], rpm:S.rpm, mode:S.mode, include_heat:S.heat, stock:S.stock, recipe_choice:S.choice, overrides:S.overrides, belt_rpm:S.belt, stack_sizes:S.stacks};
+  return {targets:[{item:S.item, per_minute:S.per}], rpm:S.rpm, mode:S.mode, include_heat:S.heat, stock:S.stock, recipe_choice:S.choice, overrides:S.overrides, belt_rpm:S.belt, stack_sizes:S.stacks, batch:S.batch, stack:S.stack, ...(S.config ? {config:S.config} : {})};
 }
 const mainRes = r => r && r.outputs[0] ? r.outputs[0].res : null;
 const outputRate = (n, r, res) => n.runs_per_min * r.outputs.filter(o => o.res === res).reduce((s, o) => s + o.amount * o.chance, 0);
@@ -230,7 +269,7 @@ async function replan(opts = {}){
     if (my !== seq) return;
     offline = false; setStatus('');
     show(p, opts);
-    api('/api/power', {su:p.total_su}).then(r => { if (my === seq) { power = r; if (panel && panel.kind === 'load') renderPanel(); } }).catch(() => {});
+    api('/api/power', {su:p.total_su, sails:S.sails, ...(S.config ? {config:S.config} : {})}).then(r => { if (my === seq) { power = r; if (panel && panel.kind === 'load') renderPanel(); } }).catch(() => {});
   } catch (e) {
     if (my !== seq) return;
     if (e.http) { setStatus(/^invalid request: rpm/.test(e.message) ? 'RPM вне допустимого диапазона' : e.message, true); return; }
@@ -268,6 +307,7 @@ function show(p, opts){
     if (hit) panel.id = hit.id; else panel = null;
   }
   renderPanel();
+  renderMaterials();
   if (opts.fit) fit();
   document.querySelectorAll('.node').forEach(el => el.classList.toggle('sel', !!panel && panel.id === el.dataset.id));
 }
@@ -568,10 +608,11 @@ function fit(){
   if (!ns.length) return;
   const x0 = Math.min(...ns.map(n => n.x)), x1 = Math.max(...ns.map(n => n.x + W));
   const y0 = Math.min(...ns.map(n => n.y)), y1 = Math.max(...ns.map(n => n.y + n.h));
-  const top = 44, areaW = innerWidth - (panel ? 340 : 0), areaH = innerHeight - top;
+  // The floating sidebar covers the left edge, so the graph is fitted beside it.
+  const left = $('side').offsetWidth + 24, top = 44, areaW = innerWidth - left - (panel ? 340 : 0), areaH = innerHeight - top;
   const pad = 36;
   const k = Math.max(.12, Math.min(1, (areaW - pad*2) / (x1 - x0), (areaH - pad*2) / (y1 - y0)));
-  view = {k, x:(areaW - (x1 - x0)*k) / 2 - x0*k, y:top + (areaH - (y1 - y0)*k) / 2 - y0*k};
+  view = {k, x:left + (areaW - (x1 - x0)*k) / 2 - x0*k, y:top + (areaH - (y1 - y0)*k) / 2 - y0*k};
   applyView();
 }
 function zoomAt(cx, cy, factor){
@@ -605,7 +646,7 @@ function loadPanel(){
   const rows = [...by].sort((a, b) => b[1].su - a[1].su).map(([m, e]) => `<div class="row">${machineIcon(m, 18)}<span>${esc(MACH[m] || m)}</span><span class="d">×${fmt(e.c)}</span><span class="v p">${fmt(e.su)} SU</span></div>`).join('');
   let h = `<div class="ph"><h2>Нагрузка и здания</h2></div><div class="row"><span>Всего</span><span class="v p">${fmt(plan.total_su)} SU</span></div><h3>SU по машинам</h3>${rows || '<div class="note">Машин нет</div>'}`;
   if (power) {
-    h += `<h3>Чем покрыть нагрузку (любой один вариант)</h3>` + power.sources.map(s => `<div class="row"><span>${esc(SOURCES[s.id] || readable(s.id))}</span><span class="d">${fmt(s.su_each)} SU</span><span class="v p">×${fmt(s.count)}</span></div>`).join('');
+    h += `<h3>Чем покрыть нагрузку (любой один вариант)</h3>` + power.sources.map(s => `<div class="row"><span>${esc(s.id === 'windmill_bearing' ? `Мельница (${S.sails} парусов)` : SOURCES[s.id] || readable(s.id))}</span><span class="d">${fmt(s.su_each)} SU</span><span class="v p">×${fmt(s.count)}</span></div>`).join('');
     const b = power.boilers;
     h += `<div class="note">Котёл: уровней ${b.levels}, двигателей ${b.engines}, бак ${b.tank_blocks} бл., вода ${b.water_mb_per_tick} мБ/тик, бёрнеров ${b.burners_kindled} (или ${b.burners_seething} раскалённых)</div>`;
   }
@@ -640,7 +681,7 @@ function nodePanel(n){
     const opts = [n.recipe, ...n.alternatives];
     h += `<h3>Рецепт</h3><select id="pRecipe">${opts.map(o => `<option value="${esc(o)}"${o === n.recipe ? ' selected' : ''}>${esc(recipeLabel(o))}</option>`).join('')}</select>`;
     if (n.machine_options.length) h += `<h3>Машина</h3><select id="pMachine">${n.machine_options.map(m => `<option value="${m}"${m === n.loads[0].machine ? ' selected' : ''}>${esc(machineName(m, recipes.get(n.recipe).kind))}</option>`).join('')}</select>`;
-    h += `<h3>Свой RPM</h3><input id="pRpm" class="inp" type="number" min="1" max="256" step="any" placeholder="Общий: ${fmt(S.rpm)}" value="${over.rpm ?? ''}">`;
+    h += `<h3>Свой RPM</h3><input id="pRpm" class="inp" type="number" min="1" step="any" placeholder="Общий: ${fmt(S.rpm)}" value="${over.rpm ?? ''}">`;
     const l = n.loads[0];
     if (l.ticks) {
       const perUnit = l.items_per_op * 1200 / l.ticks;
@@ -678,7 +719,6 @@ function renderPanel(){
   renderTotals();
   document.querySelectorAll('.node').forEach(c => c.classList.toggle('sel', !!panel && panel.id === c.dataset.id));
   if (!panel || !plan) return;
-  if (panel.kind === 'build') { $('panelBody').innerHTML = buildPanel(); bindBuildPanel(); return; }
   if (panel.kind === 'edge') {
     const e = G.edges.find(x => edgeKey(x) === panel.key);
     if (!e) { panel = null; el.classList.remove('open'); return; }
@@ -739,22 +779,50 @@ function openNode(id, focusRecipe){
 }
 function closePanel(){ panel = null; renderPanel(); }
 const buildRow = (id, count) => `<div class="row">${itemIcon(id, 18)}<span>${esc(nameOf(id))}</span><span class="v p">${fmt(count)}</span></div>`;
-function buildPanel(){
-  const list = plan.build || [];
-  if (!list.length) return `<div class="ph"><h2>Материалы</h2></div><div class="note">Для этой схемы ничего строить не нужно.</div>`;
-  let h = `<div class="ph"><h2>Материалы</h2></div><h3>Что построить</h3>` + list.map(b => buildRow(b.item, b.count)).join('');
-  h += `<div class="note">Лента указана по числу линий, её длина зависит от постройки. Валы, шестерни, трубы, насосы и источники энергии не входят.</div>`;
-  h += `<div class="btns"><button class="btn" id="bCopy">Скопировать</button><button class="btn" id="bRaw">Посчитать материалы</button></div><div class="note" id="bNote"></div><div id="bRawList"></div>`;
-  return h;
+let matSeq = 0, matList = [];
+// One minute of a plan at these rates is the whole list; it stops at ingots rather than ore.
+async function renderMaterials(){
+  const list = (plan && plan.build) || [], my = ++matSeq;
+  $('matBuild').innerHTML = list.map(b => buildRow(b.item, b.count)).join('') || '<div class="note">Строить нечего.</div>';
+  $('bNote').textContent = '';
+  matList = [];
+  if (!list.length) { $('matRaw').innerHTML = '<div class="note">Нет</div>'; return; }
+  if (!$('sMat').open) return;
+  try {
+    const p = await api('/api/plan', {targets:list.map(b => ({item:b.item, per_minute:b.count})), rpm:S.rpm, stop_at_materials:true, ...(S.config ? {config:S.config} : {})});
+    if (my !== matSeq) return;
+    matList = p.nodes.filter(n => n.type === 'gather').sort((x, y) => (x.origin !== 'material') - (y.origin !== 'material') || y.per_minute - x.per_minute).map(n => ({item:n.res, count:Math.ceil(n.per_minute)}));
+    $('matRaw').innerHTML = matList.map(x => buildRow(x.item, x.count)).join('') || '<div class="note">Нет</div>';
+  } catch (e) { if (my === matSeq) $('matRaw').innerHTML = `<div class="note">${e.http ? esc(e.message) : 'Нужен запущенный сервер.'}</div>`; }
 }
-function buildText(){
-  return plan.build.map(b => `${nameOf(b.item)} x${b.count}`).join('\n');
+function materialsText(){
+  const lines = l => l.map(b => `${nameOf(b.item)} x${b.count}`).join('\n');
+  return `Построить:\n${lines(plan.build || [])}\n\nМатериалы:\n${lines(matList)}`;
 }
-function bindBuildPanel(){
-  const copy = $('bCopy');
-  if (!copy) return;
-  copy.addEventListener('click', async () => {
-    const text = buildText();
+let cfgDefault = null;
+const cfg = () => S.config || cfgDefault;
+function setConfig(key, value){
+  if (!cfg()) return;
+  S.config = {...cfg(), [key]:value};
+  $('cNote').textContent = 'Свои настройки.';
+  replan();
+}
+function syncSettings(){
+  const seg = (id, cur) => { $(id).innerHTML = [1, 4, 16, 64].map(v => `<button data-v="${v}"${v === cur ? ' class="on"' : ''}>${v}</button>`).join(''); };
+  seg('dBatch', S.batch); seg('dStack', S.stack);
+  $('cSails').value = S.sails;
+  const c = cfg();
+  for (const id of ['cMax', 'cFan', 'cBulkPress', 'cBulkCut', 'cSquare', 'cShapeless', 'cCrafter', 'cStone']) $(id).disabled = !c;
+  if (!c) return;
+  $('cMax').value = c.max_rotation_speed; $('cFan').value = c.fan_processing_time;
+  $('cBulkPress').checked = c.bulk_pressing; $('cBulkCut').checked = c.bulk_cutting;
+  $('cSquare').checked = c.allow_shaped_square_in_press; $('cShapeless').checked = c.allow_shapeless_in_mixer;
+  $('cCrafter').checked = c.allow_regular_crafting_in_crafter; $('cStone').checked = c.allow_stonecutting_on_saw;
+}
+function bindSide(){
+  $('sMat').addEventListener('toggle', () => { if ($('sMat').open) renderMaterials(); });
+  $('bCopy').addEventListener('click', async () => {
+    const text = materialsText();
     try {
       await navigator.clipboard.writeText(text);
     } catch (e) {
@@ -765,17 +833,38 @@ function bindBuildPanel(){
     }
     $('bNote').textContent = 'Список скопирован.';
   });
-  $('bRaw').addEventListener('click', async () => {
-    // Each amount is requested as a rate per minute, so one minute of the plan is the whole list.
-    try {
-      const p = await api('/api/plan', {targets:plan.build.map(b => ({item:b.item, per_minute:b.count})), rpm:S.rpm, stop_at_materials:true});
-      const raw = p.nodes.filter(n => n.type === 'gather').sort((a, b) => (a.origin !== 'material') - (b.origin !== 'material') || b.per_minute - a.per_minute);
-      const left = p.nodes.filter(n => n.type === 'surplus');
-      let h = `<h3>Материалы на всю постройку</h3>` + (raw.map(n => buildRow(n.res, Math.ceil(n.per_minute))).join('') || '<div class="note">Нет</div>');
-      if (left.length) h += `<h3>Останется лишнего</h3>` + left.map(n => buildRow(n.res, Math.floor(n.per_minute))).join('');
-      $('bRawList').innerHTML = h;
-    } catch (e) { $('bNote').textContent = e.http ? e.message : 'Сервер недоступен.'; }
+  const segClick = (id, key) => $(id).addEventListener('click', e => { const v = +e.target.dataset.v; if (v) { S[key] = v; syncSettings(); replan(); } });
+  segClick('dBatch', 'batch'); segClick('dStack', 'stack');
+  $('cSails').addEventListener('change', e => { const v = parseInt(e.target.value, 10); if (v > 0) { S.sails = v; replan(); } });
+  const number = (id, key) => $(id).addEventListener('change', e => { const v = parseFloat(e.target.value); if (v > 0) setConfig(key, v); });
+  number('cMax', 'max_rotation_speed'); number('cFan', 'fan_processing_time');
+  const check = (id, key) => $(id).addEventListener('change', e => setConfig(key, e.target.checked));
+  check('cBulkPress', 'bulk_pressing'); check('cBulkCut', 'bulk_cutting');
+  check('cSquare', 'allow_shaped_square_in_press'); check('cShapeless', 'allow_shapeless_in_mixer');
+  check('cCrafter', 'allow_regular_crafting_in_crafter'); check('cStone', 'allow_stonecutting_on_saw');
+  $('cFile').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try { await applyToml(await file.text(), file.name); } catch (err) { $('cNote').textContent = 'Не удалось прочитать файл: ' + err.message; }
+    e.target.value = '';
   });
+  $('cReset').addEventListener('click', () => {
+    S.config = null; S.batch = 1; S.stack = 1; S.sails = 64; S.belt = null;
+    $('cNote').textContent = 'Значения Create по умолчанию.';
+    syncControls(); syncSettings(); replan();
+  });
+}
+async function applyToml(text, name){
+  const r = await fetch(API + '/api/config/parse', {method:'POST', body:text});
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+  S.config = data;
+  $('cNote').textContent = 'Загружен ' + name + '.';
+  syncSettings(); replan();
+}
+async function loadDefaults(){
+  try { cfgDefault = await api('/api/config/default'); } catch (e) { $('cNote').textContent = 'Настройки конфига доступны при запущенном сервере.'; }
+  syncSettings();
 }
 const edgeKey = e => e.from + '|' + e.to + '|' + e.res;
 function openEdge(key){ panel = {kind:'edge', key}; renderPanel(); }
@@ -905,7 +994,6 @@ function bindControls(){
   $('mode').addEventListener('click', e => { const v = e.target.dataset.v; if (v && v !== S.mode) { S.mode = v; syncControls(); replan(); } });
   $('heat').addEventListener('change', e => { S.heat = e.target.checked; replan(); });
   $('totals').addEventListener('click', () => { if (panel && panel.kind === 'load') closePanel(); else { panel = {kind:'load'}; renderPanel(); } });
-  $('buildBtn').addEventListener('click', () => { if (panel && panel.kind === 'build') closePanel(); else { panel = {kind:'build'}; renderPanel(); } });
   $('close').addEventListener('click', closePanel);
   addEventListener('keydown', e => { if (e.key === 'Escape' && panel && document.activeElement !== input) closePanel(); });
 }
@@ -920,13 +1008,13 @@ async function start(){
   if (h.get('heat') === '0') S.heat = false;
   if (h.get('belt')) S.belt = +h.get('belt');
   if (h.get('stack')) S.stacks = JSON.parse(h.get('stack'));
-  bindCanvas(); bindControls(); syncControls(); applyView();
+  bindCanvas(); bindControls(); bindSide(); syncControls(); applyView(); await loadDefaults();
   await replan({fit:true});
   syncControls();
   if (h.get('open')) openNode(h.get('open'));
   if (h.get('edge')) openEdge(h.get('edge'));
   if (h.get('panel') === 'load') { panel = {kind:'load'}; renderPanel(); }
-  if (h.get('panel') === 'build') { panel = {kind:'build'}; renderPanel(); }
+  if (h.get('settings')) { $('sSet').open = true; $('sMat').open = false; }
 }
 start();
 </script>
