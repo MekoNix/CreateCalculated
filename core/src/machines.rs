@@ -2,7 +2,6 @@
 //! truncates to integers, so speed is not proportional to RPM.
 //! This is working time only: ticks a machine spends starting the next operation are left out,
 //! so real output can be slightly lower. The stone generator is the one exception.
-//! See docs/formulas.md for the source of each function.
 
 use crate::config::Config;
 use crate::model::{Recipe, RecipeKind};

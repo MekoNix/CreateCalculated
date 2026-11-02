@@ -16,6 +16,9 @@ const RUN_COST: f64 = 0.01;
 /// Cost of a recipeless item that is not on the base resource list.
 const UNUSUAL_RAW_COST: f64 = 1000.0;
 const STRIPPED_RAW_COST: f64 = 1.5;
+/// Taking another member of a tag than its default must save more than a step of work,
+/// see `Catalog::tag_default`. Raw materials cost far more, so real savings still win.
+const OTHER_TAG_MEMBER_COST: f64 = RUN_COST;
 /// Full automation prices: endless generators, then farms, then digging by hand.
 const AUTO_GENERATOR_COST: f64 = 0.01;
 const AUTO_FARM_COST: f64 = 5.0;
@@ -260,6 +263,9 @@ fn gatherable(cat: &Catalog, req: &PlanRequest) -> HashMap<ResId, Origin> {
         None => {
             parse_list(cat, file_lines(MINED_RESOURCES), Origin::Mined, &mut out);
             parse_list(cat, file_lines(FARM_RESOURCES), Origin::Farm, &mut out);
+            // The log tag holds bark blocks too, and those are crafted from logs. The flower tag
+            // holds the wither rose, which grows only where a wither has killed something.
+            out.retain(|r, _| !r.ends_with("_wood") && !r.ends_with("_hyphae") && r != "minecraft:wither_rose");
             parse_list(cat, GENERATORS.iter().map(|g| g.to_string()), Origin::Generator, &mut out);
         }
     }
@@ -548,6 +554,12 @@ fn solve(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
     for (res, &v) in &sources {
         if !stock.contains(res.as_str()) {
             objective += costs.get(*res).copied().unwrap_or(1.0) * v;
+        }
+    }
+    // Wood species and the like cost the same, so without this the solver picks any of them.
+    for ((tag, member), &v) in &conversions {
+        if cat.tag_default(tag).is_some_and(|d| d != member) {
+            objective += OTHER_TAG_MEMBER_COST * v;
         }
     }
 

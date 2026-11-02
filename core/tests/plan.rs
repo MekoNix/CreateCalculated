@@ -505,3 +505,26 @@ fn the_same_item_twice_adds_up_to_one_end() {
     close(runs(&p, "cheap_sheet"), 100.0);
     assert_eq!(p.nodes.iter().filter(|n| n.id == "target:sheet").count(), 1);
 }
+
+#[test]
+fn a_tag_takes_its_default_item_unless_another_is_really_cheaper() {
+    let bundle = Bundle {
+        recipes: vec![
+            recipe("stick", RecipeKind::CraftingShaped, vec![stack("#minecraft:planks", 2.0)], vec![out("stick", 4.0, 1.0)]),
+            recipe("acacia", RecipeKind::CraftingShapeless, vec![stack("minecraft:acacia_log", 1.0)], vec![out("minecraft:acacia_planks", 4.0, 1.0)]),
+            recipe("oak", RecipeKind::CraftingShapeless, vec![stack("minecraft:oak_log", 1.0)], vec![out("minecraft:oak_planks", 4.0, 1.0)]),
+        ],
+        tags: [("#minecraft:planks".to_string(), vec!["minecraft:acacia_planks".to_string(), "minecraft:oak_planks".to_string()])].into(),
+        names: Default::default(),
+    };
+    let cat = Catalog::new(bundle);
+    assert_eq!(cat.tag_default("#minecraft:planks").map(String::as_str), Some("minecraft:oak_planks"));
+    assert_eq!(cat.name("minecraft:oak_planks", "en"), "Planks");
+    let base = Some(vec!["minecraft:acacia_log".to_string(), "minecraft:oak_log".to_string()]);
+    let p = plan(&cat, &PlanRequest { base_resources: base.clone(), ..request("stick", 60.0) }).unwrap();
+    assert!(gathered(&p, "minecraft:oak_log") > 0.0);
+    assert_eq!(gathered(&p, "minecraft:acacia_log"), 0.0);
+    // Planks in stock are free, so they beat the default.
+    let p = plan(&cat, &PlanRequest { base_resources: base, stock: vec!["minecraft:acacia_planks".into()], ..request("stick", 60.0) }).unwrap();
+    assert_eq!(gathered(&p, "minecraft:oak_log"), 0.0);
+}

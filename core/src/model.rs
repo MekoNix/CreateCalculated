@@ -5,7 +5,7 @@
 //! `#c:ingots/iron` an item tag and `#fluid:c:milk` a fluid tag.
 
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 pub type ResId = String;
 
@@ -117,16 +117,22 @@ pub struct Bundle {
     pub names: BTreeMap<ResId, Names>,
 }
 
+/// Items that stand for a tag, their names and what they replace.
+const TAG_DEFAULTS: &str = include_str!("../data/tag_defaults.txt");
+
 /// A bundle with lookup indexes.
 #[derive(Debug, Clone)]
 pub struct Catalog {
     pub bundle: Bundle,
     by_id: HashMap<String, usize>,
     producers: HashMap<ResId, Vec<usize>>,
+    tag_defaults: BTreeMap<ResId, ResId>,
+    skins: HashSet<ResId>,
 }
 
 impl Catalog {
-    pub fn new(bundle: Bundle) -> Self {
+    pub fn new(mut bundle: Bundle) -> Self {
+        let (tag_defaults, skins) = apply_tag_defaults(&mut bundle);
         let mut by_id = HashMap::new();
         let mut producers: HashMap<ResId, Vec<usize>> = HashMap::new();
         for (i, r) in bundle.recipes.iter().enumerate() {
@@ -138,7 +144,21 @@ impl Catalog {
                 }
             }
         }
-        Self { bundle, by_id, producers }
+        Self { bundle, by_id, producers, tag_defaults, skins }
+    }
+
+    /// The item that stands for a tag when any member would do.
+    pub fn tag_default(&self, tag: &str) -> Option<&ResId> {
+        self.tag_defaults.get(tag)
+    }
+
+    pub fn tag_defaults(&self) -> &BTreeMap<ResId, ResId> {
+        &self.tag_defaults
+    }
+
+    /// Whether an item is only another look of an item that stands for it, such as a wood species.
+    pub fn is_skin(&self, res: &str) -> bool {
+        self.skins.contains(res)
     }
 
     pub fn recipe(&self, id: &str) -> Option<&Recipe> {
@@ -177,4 +197,39 @@ impl Catalog {
         seen.dedup();
         seen
     }
+}
+
+/// Reads the list of default items: names them in the bundle and works out which item stands for
+/// each tag and which items are only another look of one.
+fn apply_tag_defaults(bundle: &mut Bundle) -> (BTreeMap<ResId, ResId>, HashSet<ResId>) {
+    let mut rank: HashMap<&str, usize> = HashMap::new();
+    let mut renamed = HashSet::new();
+    let mut same_thing = Vec::new();
+    let lines = TAG_DEFAULTS.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("# "));
+    for (i, line) in lines.enumerate() {
+        let mut fields = line.split('|').map(str::trim);
+        let item = fields.next().unwrap_or_default();
+        rank.insert(item, i);
+        if let (Some(en), Some(ru)) = (fields.next(), fields.next()) {
+            bundle.names.insert(item.to_string(), Names { en: Some(en.to_string()), ru: Some(ru.to_string()) });
+            renamed.insert(item);
+        }
+        if let Some(tag) = fields.next() {
+            same_thing.push((item, tag));
+        }
+    }
+    let defaults = bundle
+        .tags
+        .iter()
+        .filter_map(|(tag, members)| {
+            let best = members.iter().filter(|m| rank.contains_key(m.as_str())).min_by_key(|m| rank[m.as_str()])?;
+            Some((tag.clone(), best.clone()))
+        })
+        .collect();
+    let mut skins = HashSet::new();
+    for (item, tag) in same_thing {
+        let members = bundle.tags.get(tag).map(Vec::as_slice).unwrap_or(&[]);
+        skins.extend(members.iter().filter(|m| m.as_str() != item && !renamed.contains(m.as_str())).cloned());
+    }
+    (defaults, skins)
 }

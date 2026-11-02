@@ -458,27 +458,40 @@ pub fn import_jars(paths: &[&Path]) -> Result<(Bundle, ImportStats), String> {
 fn collect_names(pack: &Pack) -> BTreeMap<ResId, Names> {
     let mut names: BTreeMap<ResId, Names> = BTreeMap::new();
     for (path, json) in &pack.lang {
-        let russian = path.ends_with("ru_ru.json");
-        let Some(entries) = json.as_object() else { continue };
-        for (key, value) in entries {
-            let Some(text) = value.as_str() else { continue };
-            let mut parts = key.splitn(3, '.');
-            let (Some(kind), Some(ns), Some(path)) = (parts.next(), parts.next(), parts.next()) else { continue };
-            if path.contains('.') {
-                continue;
-            }
-            let id = match kind {
-                "item" | "block" => format!("{ns}:{path}"),
-                "fluid" | "fluid_type" => format!("fluid:{ns}:{path}"),
-                _ => continue,
-            };
-            let entry = names.entry(id).or_default();
-            if russian {
-                entry.ru = Some(text.to_string());
-            } else {
-                entry.en = Some(text.to_string());
-            }
-        }
+        add_names(&mut names, json, path.ends_with("ru_ru.json"));
     }
     names
+}
+
+/// Adds the item and fluid names of one language file. Minecraft keeps its translations
+/// outside the JAR, so this is also how they get into a bundle.
+pub fn add_names(names: &mut BTreeMap<ResId, Names>, lang_file: &Value, russian: bool) {
+    let Some(entries) = lang_file.as_object() else { return };
+    let mut set = |id: String, text: &str| {
+        let entry = names.entry(id).or_default();
+        if russian {
+            entry.ru = Some(text.to_string());
+        } else {
+            entry.en = Some(text.to_string());
+        }
+    };
+    for (key, value) in entries {
+        let Some(text) = value.as_str() else { continue };
+        let mut parts = key.splitn(3, '.');
+        let (Some(kind), Some(ns), Some(path)) = (parts.next(), parts.next(), parts.next()) else { continue };
+        if path.contains('.') {
+            continue;
+        }
+        match kind {
+            "item" | "block" => {
+                set(format!("{ns}:{path}"), text);
+                // The game names water and lava only as blocks.
+                if kind == "block" && ns == "minecraft" && (path == "water" || path == "lava") {
+                    set(format!("fluid:{ns}:{path}"), text);
+                }
+            }
+            "fluid" | "fluid_type" => set(format!("fluid:{ns}:{path}"), text),
+            _ => {}
+        }
+    }
 }

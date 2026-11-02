@@ -1,5 +1,5 @@
 //! Sanity checks on real recipes. The bundle is generated locally and never committed,
-//! so these skip themselves when `data/bundle.json` is missing. See docs/import.md.
+//! so these skip themselves when `data/bundle.json` is missing.
 
 use createcalc_core::model::{Bundle, Catalog};
 use createcalc_core::plan::{plan, Branch, Mode, NodeKind, Plan, PlanRequest, Target};
@@ -135,4 +135,79 @@ fn several_targets_use_each_others_leftovers() {
     // Arrows take flint from washing gravel for the iron, so no gravel is milled for them.
     assert!(!p.nodes.iter().any(|n| matches!(&n.kind, NodeKind::Recipe { recipe, .. } if recipe == "create:milling/gravel")));
     assert!(p.edges.iter().any(|e| e.res == "minecraft:flint" && e.to == "recipe:minecraft:arrow" && e.from == "recipe:create:splashing/gravel"));
+}
+
+/// Every kind of wood costs the same, so what a plan uses must not depend on the solver's mood.
+fn other_species(res: &str) -> bool {
+    ["acacia", "bamboo", "birch", "cherry", "crimson", "dark_oak", "jungle", "mangrove", "spruce", "warped"].iter().any(|s| res.contains(s))
+}
+
+fn items_used(p: &Plan) -> Vec<&str> {
+    p.edges.iter().map(|e| e.res.as_str()).collect()
+}
+
+#[test]
+fn wood_is_oak_whatever_the_mode() {
+    let Some(cat) = catalog() else { return };
+    for mode in [Mode::Normal, Mode::FullAuto] {
+        for item in ["create:analog_lever", "create:andesite_casing", "create:cart_assembler", "create:white_seat", "minecraft:stick", "minecraft:chest"] {
+            let p = plan(&cat, &PlanRequest { targets: vec![Target { item: item.into(), per_minute: 60.0 }], mode, ..Default::default() }).unwrap();
+            let used = items_used(&p);
+            assert!(!used.iter().any(|r| other_species(r)), "{item}: {used:?}");
+        }
+    }
+    let lever = solve(&cat, "create:analog_lever");
+    let raw = gathered(&lever);
+    assert!(raw.contains(&"minecraft:oak_log") && raw.contains(&"minecraft:stripped_oak_log"), "{raw:?}");
+    assert_eq!(cat.name("minecraft:oak_log", "en"), "Wood");
+    assert_eq!(cat.name("minecraft:oak_planks", "ru"), "Доски");
+}
+
+#[test]
+fn glass_comes_from_plain_sand_and_black_dye_from_ink() {
+    let Some(cat) = catalog() else { return };
+    for mode in [Mode::Normal, Mode::FullAuto] {
+        let glass = plan(&cat, &PlanRequest { targets: vec![Target { item: "minecraft:glass".into(), per_minute: 60.0 }], mode, ..Default::default() }).unwrap();
+        assert!(!items_used(&glass).contains(&"minecraft:red_sand"), "{:?}", items_used(&glass));
+        let dye = plan(&cat, &PlanRequest { targets: vec![Target { item: "minecraft:black_dye".into(), per_minute: 60.0 }], mode, ..Default::default() }).unwrap();
+        assert!(!items_used(&dye).contains(&"minecraft:wither_rose"), "{:?}", items_used(&dye));
+    }
+}
+
+#[test]
+fn bark_blocks_are_crafted_rather_than_gathered() {
+    let Some(cat) = catalog() else { return };
+    assert_eq!(gathered(&solve(&cat, "minecraft:oak_wood")), ["minecraft:oak_log"]);
+}
+
+#[test]
+fn a_recipe_asking_for_a_species_still_gets_it() {
+    let Some(cat) = catalog() else { return };
+    assert_eq!(gathered(&solve(&cat, "minecraft:acacia_planks")), ["minecraft:acacia_log"]);
+}
+
+#[test]
+fn build_materials_use_plain_planks() {
+    let Some(cat) = catalog() else { return };
+    let targets = vec![Target { item: "create:mechanical_press".into(), per_minute: 1.0 }, Target { item: "minecraft:chest".into(), per_minute: 1.0 }];
+    let p = plan(&cat, &PlanRequest { targets, stop_at_materials: true, ..Default::default() }).unwrap();
+    let raw = gathered(&p);
+    assert!(raw.contains(&"minecraft:oak_planks"), "{raw:?}");
+    assert!(!raw.iter().any(|r| other_species(r)), "{raw:?}");
+}
+
+#[test]
+fn every_default_item_exists_and_every_skin_has_a_default() {
+    let Some(cat) = catalog() else { return };
+    let text = include_str!("../data/tag_defaults.txt");
+    for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("# ")) {
+        let mut fields = line.split('|').map(str::trim);
+        let item = fields.next().unwrap();
+        assert!(cat.bundle.tags.values().any(|m| m.iter().any(|x| x == item)), "{item} is in no tag");
+        if let Some(tag) = fields.nth(2) {
+            assert_eq!(cat.tag_default(tag).map(String::as_str), Some(item), "{tag}");
+        }
+    }
+    assert!(cat.is_skin("minecraft:acacia_planks") && cat.is_skin("minecraft:crimson_stem"));
+    assert!(!cat.is_skin("minecraft:oak_planks") && !cat.is_skin("minecraft:stone_button") && !cat.is_skin("create:acacia_window"));
 }
