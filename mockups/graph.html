@@ -21,6 +21,7 @@ button,input,select{font:inherit;color:inherit}
 .elabel span.warn,.note.warn{color:#d9a441}
 .elabel span.n{margin-top:1px;padding:0 2px;background:var(--bg);border-radius:2px;line-height:13px}
 .ic{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:2px;font-weight:600;line-height:1;letter-spacing:-.02em;user-select:none}
+.ic img{display:block;width:100%;height:100%;image-rendering:pixelated;pointer-events:none}
 .node{position:absolute;width:260px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:9px 10px 7px;cursor:pointer;user-select:none}
 .node:active{cursor:grabbing}
 .node:hover{border-color:var(--line2)}
@@ -246,7 +247,7 @@ const SOURCES = {water_wheel:'Водяное колесо', large_water_wheel:'�
 const CATALYST = {splashing:'вода', haunting:'огонь душ', smelting:'лава или бёрнер', blasting:'лава или бёрнер', smoking:'огонь или костёр'};
 const machineName = (m, kind) => m === 'fan' && FAN[kind] || MACH[m] || readable(m);
 
-/* ---------- Icon: replace this function when real icons become available ---------- */
+/* ---------- Icons: pictures from createcalc-icons, letters where there is no picture ---------- */
 const MATERIALS = [
   [/gold|golden/,'#e3bd3f'],[/brass/,'#c9a24a'],[/copper/,'#c77a4a'],[/zinc/,'#8fb0ae'],[/iron|andesite_alloy/,'#a7abb0'],
   [/quartz/,'#ece8e0'],[/soul_sand/,'#6e5340'],[/red_sand/,'#c0683a'],[/sand/,'#dcc98e'],[/gravel/,'#85817c'],[/flint/,'#44464a'],
@@ -265,13 +266,46 @@ function iconLetters(name){
   if (w.length > 1) return (w[0][0] + w[1][0]).toUpperCase();
   return (w[0] || '?').slice(0, 2).replace(/^./, c => c.toUpperCase());
 }
-function icon(id, name, size){
-  const c = iconColor(id);
+function letterIcon(id, name, size, machine){
+  const c = machine ? '#3c4047' : iconColor(id);
   const n = parseInt(c.slice(1), 16), lum = .299*(n>>16) + .587*(n>>8&255) + .114*(n&255);
-  return `<span class="ic" style="width:${size}px;height:${size}px;background:${c};color:${lum > 130 ? '#1a1b1e' : '#f1f1f1'};font-size:${Math.round(size*.46)}px">${esc(iconLetters(name))}</span>`;
+  const text = machine ? '#d8dade' : lum > 130 ? '#1a1b1e' : '#f1f1f1';
+  return `<span class="ic" style="width:${size}px;height:${size}px;background:${c};color:${text};font-size:${Math.round(size*.46)}px">${esc(iconLetters(name))}</span>`;
 }
+// Undefined until the index answers, so nothing shows letters on its way to a picture.
+let iconUrls;
+// Holding a loaded picture lets a redrawn card paint it at once, without a request or a flash.
+const iconImages = new Map();
+function icon(id, name, size, machine){
+  const box = `data-ic="${esc(id)}" data-ic-name="${esc(name)}" data-ic-size="${size}"${machine ? ' data-ic-machine="1"' : ''} style="width:${size}px;height:${size}px"`;
+  if (!iconUrls) return `<span class="ic" data-ic-wait="1" ${box}></span>`;
+  const url = iconUrls.get(id);
+  if (!url) return letterIcon(id, name, size, machine);
+  if (!iconImages.has(url)) { const im = new Image(); im.src = url; iconImages.set(url, im); }
+  return `<span class="ic" ${box}><img src="${esc(url)}" alt="" decoding="sync" draggable="false"></span>`;
+}
+function redrawIcon(el){
+  const d = el.dataset;
+  el.outerHTML = icon(d.ic, d.icName, +d.icSize, !!d.icMachine);
+}
+fetch(API + '/api/icons/index.json', {signal:AbortSignal.timeout(3000)})
+  .then(r => r.ok ? r.json() : null)
+  .catch(() => null)
+  .then(index => {
+    iconUrls = new Map(Object.entries(index && index.icons || {}).map(([id, path]) => [id, `${API}/api/icons/${path}?v=${index.version}`]));
+    document.querySelectorAll('.ic[data-ic-wait]').forEach(redrawIcon);
+  });
+// A picture that fails to load, say after the folder was removed, goes back to letters for good.
+addEventListener('error', e => {
+  const box = e.target.parentElement;
+  if (e.target.tagName !== 'IMG' || !box || !box.dataset.ic) return;
+  iconUrls.delete(box.dataset.ic);
+  redrawIcon(box);
+}, true);
 const itemIcon = (id, size) => icon(id, nameOf(id), size);
-const machineIcon = (m, size) => icon('machine:' + m, MACH[m] || m, size).replace(/background:#[0-9a-f]+/, 'background:#3c4047').replace(/color:#[0-9a-f]+/, 'color:#d8dade');
+// The item that stands for a machine. Working by hand has no block, so it keeps its letters.
+const MACHINE_ITEM = {press:'create:mechanical_press', mixer:'create:mechanical_mixer', millstone:'create:millstone', crushing_wheels:'create:crushing_wheel', saw:'create:mechanical_saw', deployer:'create:deployer', spout:'create:spout', item_drain:'create:item_drain', mechanical_crafter:'create:mechanical_crafter', fan:'create:encased_fan', drill:'create:mechanical_drill', furnace:'minecraft:furnace', blast_furnace:'minecraft:blast_furnace', smoker:'minecraft:smoker'};
+const machineIcon = (m, size) => icon(MACHINE_ITEM[m] || 'machine:' + m, MACH[m] || m, size, true);
 function tint(hex){ // muted item colour for edges
   const n = parseInt(hex.slice(1), 16), base = 142, t = .32;
   const mix = v => Math.round(base + (v - base)*t);
@@ -562,6 +596,12 @@ function machineRows(n, kind){
   }).join('');
 }
 // RPM, how full the machines are and stress, the same for recipes and generators.
+// One fan works on the whole straight belt in its stream, so this says how long that belt is.
+function beltPerFan(l){
+  if (!l.stream_blocks) return '';
+  const each = Math.ceil(l.stream_blocks / Math.max(l.count, 1));
+  return `<span class="r2" title="Один вентилятор работает на всю ленту в своём потоке">${l.count > 1 ? 'каждый на ленту' : 'на ленту'} ${each} бл.</span>`;
+}
 function statsRows(loads, ownRpm, extraRight){
   const l = loads[0];
   const speed = NO_RPM.has(l.machine) ? '<span class="muted">от RPM не зависит</span>'
@@ -569,7 +609,7 @@ function statsRows(loads, ownRpm, extraRight){
   const full = Math.max(...loads.map(x => x.count ? x.exact / x.count : 0));
   const su = loads.reduce((s, x) => s + x.su, 0);
   const pct = l.machine === 'hand' ? '' : `<span class="r2 ${full >= .95 ? 'tight' : ''}">загрузка ${Math.ceil(full * 100 - 1e-6)}%</span>`;
-  return `<div class="stats">${speed}${pct || '<span></span>'}<span>${su ? fmt(su) + ' SU' : '<span class="muted">без SU</span>'}</span>${extraRight || '<span></span>'}</div>`;
+  return `<div class="stats">${speed}${pct || '<span></span>'}<span>${su ? fmt(su) + ' SU' : '<span class="muted">без SU</span>'}</span>${extraRight || beltPerFan(l) || '<span></span>'}</div>`;
 }
 function cardHtml(n){
   const row = (res, rate) => `<div class="head">${itemIcon(res, 24)}<div><div class="t" title="${esc(nameOf(res))}">${esc(nameOf(res))}</div><div class="r">${rateText(res, rate)}</div></div></div>`;
@@ -756,7 +796,13 @@ function nodePanel(n){
       h += `<h3>Партия</h3><div class="seg" id="pBatch">${[1, 4, 16, 64].map(b => `<button data-v="${b}"${b === cur ? ' class="on"' : ''}>${b}</button>`).join('')}</div>`;
     }
     if (n.loads.length > 1) h += `<h3>Шаги сборки</h3>` + n.loads.map((s, i) => `<div class="row">${machineIcon(s.machine, 18)}<span>${i + 1}. ${esc(MACH[s.machine])}</span><span class="d">${fmt(s.su)} SU</span><span class="v p">×${s.count}</span></div>`).join('');
-    if (l.stream_blocks) h += `<h3>Вентилятор</h3><div class="row"><span>Максимум RPM ленты</span><span class="v p">${fmt(l.max_belt_rpm)}</span></div>`;
+    if (l.stream_blocks) {
+      const each = Math.ceil(l.stream_blocks / Math.max(l.count, 1)), reach = l.stream_blocks / l.exact;
+      h += `<h3>Вентилятор</h3><div class="row"><span>Лента на один вентилятор</span><span class="v p">${each} бл.</span></div>`;
+      h += `<div class="row"><span>Дальность потока</span><span class="v p">до ${fmt(reach)} бл.</span></div>`;
+      h += `<div class="row"><span>Максимум RPM ленты</span><span class="v p">${fmt(l.max_belt_rpm)}</span></div>`;
+      h += `<div class="note">Один вентилятор работает на всю ленту в своём потоке. Поставьте его в начале или конце прямой ленты, катализатор между ним и лентой.</div>`;
+    }
     h += `<h3>Входы</h3>${flowRows(ins, 'in') || '<div class="note">Нет</div>'}`;
     h += `<h3>Выходы</h3>${flowRows(outs, 'out') || `<div class="note">Только конечная цель</div>`}`;
     h += `<div class="btns"><button class="btn" id="pStock">Со склада</button><button class="btn" id="pReset">Сбросить</button></div>`;

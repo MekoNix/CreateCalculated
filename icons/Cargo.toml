@@ -1,0 +1,22 @@
+[package]
+name = "createcalc-icons"
+version.workspace = true
+edition.workspace = true
+description = "Renders inventory icons from Minecraft and mod JARs on the user's machine"
+
+[lib]
+name = "createcalc_icons"
+
+[[bin]]
+name = "createcalc-icons"
+path = "src/main.rs"
+
+[dependencies]
+createcalc-core = { path = "../core" }
+serde_json.workspace = true
+png = "0.18"
+sha1 = "0.11"
+sha2 = "0.11"
+toml = "0.8"
+ureq = "3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
