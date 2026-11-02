@@ -5,7 +5,7 @@
 //! The objective minimises raw material cost, with a tiny cost per run to avoid pointless loops.
 
 use crate::config::Config;
-use crate::machines::{self, Load, Machine};
+use crate::machines::{self, Load, Machine, Transport};
 use crate::model::{Catalog, Heat, Recipe, RecipeKind, ResId};
 use crate::power::{CAKE_BURN_TICKS, COAL_BURN_TICKS};
 use good_lp::{constraint, variable, variables, Expression, Solution, SolverModel, Variable};
@@ -82,6 +82,12 @@ pub struct PlanRequest {
     /// Replaces the built-in base resource list when set. Entries may be tags.
     pub base_resources: Option<Vec<ResId>>,
     pub mode: Mode,
+    /// RPM of belts, the machine RPM when unset.
+    pub belt_rpm: Option<f64>,
+    /// Stack size on belts where neither `stack_sizes` nor the receiving machine sets one.
+    pub stack: u32,
+    /// Stack size per item.
+    pub stack_sizes: BTreeMap<ResId, u32>,
 }
 
 impl Default for PlanRequest {
@@ -98,6 +104,9 @@ impl Default for PlanRequest {
             include_heat: true,
             base_resources: None,
             mode: Mode::Normal,
+            belt_rpm: None,
+            stack: 1,
+            stack_sizes: BTreeMap::new(),
         }
     }
 }
@@ -108,12 +117,14 @@ pub enum NodeKind {
     /// A recipe running on machines.
     Recipe {
         recipe: String,
+        /// What the plan needs from this recipe: the target, else the output used the most.
+        produces: ResId,
         runs_per_min: f64,
         /// One entry, or one per step for sequenced assembly.
         loads: Vec<Load>,
         heat: Heat,
         burners: u32,
-        /// Other recipes that make the same main output.
+        /// Other recipes that make `produces`, those with it as the main output first.
         alternatives: Vec<String>,
         machine_options: Vec<Machine>,
     },
@@ -142,6 +153,8 @@ pub struct Edge {
     pub to: String,
     pub res: ResId,
     pub per_minute: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transport: Option<Transport>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -223,24 +236,35 @@ fn stops_walk(req: &PlanRequest, origin: Origin) -> bool {
     req.mode == Mode::Normal || origin != Origin::Mined
 }
 
+/// Whether a recipe can run at all under this config.
+fn runnable(r: &Recipe, cfg: &Config) -> bool {
+    r.kind == RecipeKind::SequencedAssembly || !machines::options(r, cfg).is_empty()
+}
+
 /// Recipes the request allows, by index in the catalog.
 fn allowed(cat: &Catalog, req: &PlanRequest) -> HashSet<usize> {
     let disabled: HashSet<&str> = req.disabled_recipes.iter().map(String::as_str).collect();
+    let chosen: HashSet<&str> = req.recipe_choice.values().map(String::as_str).collect();
     cat.recipes()
         .iter()
         .enumerate()
         .filter(|(_, r)| {
-            if disabled.contains(r.id.as_str()) {
+            if disabled.contains(r.id.as_str()) || !runnable(r, &req.config) {
                 return false;
             }
-            if r.kind != RecipeKind::SequencedAssembly && machines::options(r, &req.config).is_empty() {
-                return false;
-            }
-            // A forced recipe rules out others whose main output is that item.
-            !r.main_output().and_then(|m| req.recipe_choice.get(m)).is_some_and(|chosen| chosen != &r.id)
+            // A forced recipe is the only source of its item, by-products of others included,
+            // unless the other recipe was forced too.
+            chosen.contains(r.id.as_str()) || !r.outputs.iter().any(|o| req.recipe_choice.contains_key(&o.res))
         })
         .map(|(i, _)| i)
         .collect()
+}
+
+/// Recipes able to make an item, those with it as the main output first.
+pub fn producers<'a>(cat: &'a Catalog, item: &str, cfg: &Config) -> Vec<&'a Recipe> {
+    let mut list: Vec<&Recipe> = cat.producer_indexes(item).iter().map(|&i| &cat.recipes()[i]).filter(|r| runnable(r, cfg)).collect();
+    list.sort_by_key(|r| r.main_output().map(String::as_str) != Some(item));
+    list
 }
 
 /// Walks back from the targets to find the resources and recipes involved.
@@ -353,6 +377,9 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
         }
     };
     check_rpm(req.rpm)?;
+    if let Some(rpm) = req.belt_rpm {
+        check_rpm(rpm)?;
+    }
     for o in req.overrides.values() {
         if let Some(rpm) = o.rpm {
             check_rpm(rpm)?;
@@ -525,19 +552,18 @@ fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, allowed: &HashSe
             Heat::Superheated => superheated += burners,
             Heat::None => {}
         }
-        let alternatives = r
-            .main_output()
-            .map(|m| {
-                cat.producer_indexes(m)
-                    .iter()
-                    .filter(|&&j| j != i && allowed.contains(&j) && cat.recipes()[j].main_output() == Some(m))
-                    .map(|&j| cat.recipes()[j].id.clone())
-                    .collect()
-            })
-            .unwrap_or_default();
         nodes.push(Node {
             id: id.clone(),
-            kind: NodeKind::Recipe { recipe: r.id.clone(), runs_per_min: x, loads, heat: r.heat, burners, alternatives, machine_options },
+            kind: NodeKind::Recipe {
+                recipe: r.id.clone(),
+                produces: r.main_output().cloned().unwrap_or_default(),
+                runs_per_min: x,
+                loads,
+                heat: r.heat,
+                burners,
+                alternatives: vec![],
+                machine_options,
+            },
         });
         for o in &r.outputs {
             suppliers.entry(o.res.clone()).or_default().push((id.clone(), x * o.expected()));
@@ -607,12 +633,14 @@ fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, allowed: &HashSe
             for (from, have) in supply {
                 let flow = need * have / total;
                 if flow > EPS {
-                    raw_edges.push(Edge { from: from.clone(), to: to.clone(), res: res.clone(), per_minute: flow });
+                    raw_edges.push(Edge { from: from.clone(), to: to.clone(), res: res.clone(), per_minute: flow, transport: None });
                 }
             }
         }
     }
-    let edges = collapse_conversions(raw_edges);
+    let mut edges = collapse_conversions(raw_edges);
+    name_recipe_nodes(cat, req, &mut nodes, &edges);
+    add_transport(cat, req, &nodes, &mut edges);
 
     let heat = req.include_heat.then(|| HeatStats {
         burners_heated: heated,
@@ -621,6 +649,51 @@ fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, allowed: &HashSe
         cake_per_min: superheated as f64 * 1200.0 / CAKE_BURN_TICKS,
     });
     Ok(Plan { nodes, edges, total_su, machines: machine_counts, heat, warnings, manual })
+}
+
+/// Works out what each recipe is there for, and which other recipes could do it.
+fn name_recipe_nodes(cat: &Catalog, req: &PlanRequest, nodes: &mut [Node], edges: &[Edge]) {
+    let disabled: HashSet<&str> = req.disabled_recipes.iter().map(String::as_str).collect();
+    for node in nodes {
+        let NodeKind::Recipe { recipe, produces, alternatives, .. } = &mut node.kind else { continue };
+        let out: Vec<&Edge> = edges.iter().filter(|e| e.from == node.id).collect();
+        let goal = out.iter().find(|e| e.to.starts_with("target:"));
+        let used = out.iter().filter(|e| !e.to.starts_with("surplus:")).max_by(|a, b| a.per_minute.total_cmp(&b.per_minute));
+        if let Some(e) = goal.or(used) {
+            *produces = e.res.clone();
+        }
+        *alternatives = producers(cat, produces, &req.config)
+            .into_iter()
+            .filter(|r| &r.id != recipe && !disabled.contains(r.id.as_str()))
+            .map(|r| r.id.clone())
+            .collect();
+    }
+}
+
+fn add_transport(cat: &Catalog, req: &PlanRequest, nodes: &[Node], edges: &mut [Edge]) {
+    let by_id: HashMap<&str, &NodeKind> = nodes.iter().map(|n| (n.id.as_str(), &n.kind)).collect();
+    let belt_rpm = req.belt_rpm.unwrap_or(req.rpm);
+    for e in edges {
+        if e.res.contains("fluid:") {
+            continue;
+        }
+        // A machine working in batches sets the stack it receives.
+        let wanted = match by_id.get(e.to.as_str()) {
+            Some(NodeKind::Recipe { loads, .. }) => loads.first().map(|l| l.items_per_op).filter(|n| *n > 1),
+            _ => None,
+        };
+        let stack = req.stack_sizes.get(&e.res).copied().or(wanted).unwrap_or(req.stack);
+        // What the source hands over at once.
+        let source_yield = match by_id.get(e.from.as_str()) {
+            Some(NodeKind::Recipe { recipe, loads, .. }) => {
+                let per_run: f64 = cat.recipe(recipe).map_or(1.0, |r| r.outputs.iter().filter(|o| o.res == e.res).map(|o| o.amount).sum());
+                per_run * loads.first().map_or(1, |l| l.items_per_op) as f64
+            }
+            Some(NodeKind::Generate { .. }) => 1.0,
+            _ => f64::INFINITY,
+        };
+        e.transport = Some(machines::transport(e.per_minute, stack, belt_rpm, source_yield, &req.config));
+    }
 }
 
 /// Removes tag conversion nodes, joining flows so edges name the real item.
@@ -645,6 +718,6 @@ fn collapse_conversions(raw: Vec<Edge>) -> Vec<Edge> {
     joined
         .into_iter()
         .filter(|((from, to, _), flow)| from != to && *flow > EPS)
-        .map(|((from, to, res), per_minute)| Edge { from, to, res, per_minute })
+        .map(|((from, to, res), per_minute)| Edge { from, to, res, per_minute, transport: None })
         .collect()
 }

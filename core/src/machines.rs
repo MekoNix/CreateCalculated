@@ -243,6 +243,45 @@ pub fn fan_range(rpm: f64, cfg: &Config) -> f64 {
     3.0 + (cfg.fan_push_distance - 3.0) * t
 }
 
+/// Stacks per minute one belt carries at 1 RPM: `getSpeed() / 480` blocks per tick,
+/// and `BeltInventory` keeps stacks one block apart.
+pub const BELT_STACKS_PER_MIN_PER_RPM: f64 = 1200.0 / 480.0;
+
+/// How one flow of items travels. Fluids have none.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Transport {
+    pub stack: u32,
+    pub belt_rpm: f64,
+    /// Belts needed at `belt_rpm`.
+    pub belts: u32,
+    /// The slowest single belt that would carry this flow.
+    pub min_belt_rpm: f64,
+    /// Funnels needed to load it, each moving one stack per `default_extraction_timer` ticks.
+    pub funnels: u32,
+    /// The source yields less than a stack at a time, so items must collect in a container first.
+    pub needs_buffer: bool,
+}
+
+fn need(amount: f64) -> u32 {
+    (amount - 1e-9).ceil().max(0.0) as u32
+}
+
+/// Sizes the transport for `per_min` items moved in stacks of `stack`.
+pub fn transport(per_min: f64, stack: u32, belt_rpm: f64, source_yield: f64, cfg: &Config) -> Transport {
+    let stack = stack.max(1);
+    let stacks_per_min = per_min / stack as f64;
+    let min_belt_rpm = stacks_per_min / BELT_STACKS_PER_MIN_PER_RPM;
+    let funnel_ops = 1200.0 / cfg.default_extraction_timer.max(1) as f64;
+    Transport {
+        stack,
+        belt_rpm,
+        belts: need(min_belt_rpm / belt_rpm),
+        min_belt_rpm,
+        funnels: need(stacks_per_min / funnel_ops),
+        needs_buffer: (stack as f64) > source_yield,
+    }
+}
+
 /// Result of sizing one machine type for a required rate.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Load {

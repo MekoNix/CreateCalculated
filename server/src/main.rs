@@ -9,7 +9,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use createcalc_core::config::Config;
 use createcalc_core::model::{Bundle, Catalog};
-use createcalc_core::plan::{plan, Plan, PlanError, PlanRequest};
+use createcalc_core::plan::{plan, producers, Plan, PlanError, PlanRequest};
 use createcalc_core::power::{plan_power, PowerPlan};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -61,6 +61,17 @@ async fn recipe(State(cat): State<Shared>, axum::extract::Path(id): axum::extrac
     Ok(Json(serde_json::to_value(r).unwrap_or_default()))
 }
 
+#[derive(Deserialize)]
+struct ProducerQuery {
+    item: String,
+}
+
+/// Recipes that can make an item, those with it as the main output first.
+async fn item_producers(State(cat): State<Shared>, Query(query): Query<ProducerQuery>) -> Json<serde_json::Value> {
+    let list = producers(&cat, &query.item, &Config::default());
+    Json(serde_json::to_value(list).unwrap_or_default())
+}
+
 async fn default_config() -> Json<Config> {
     Json(Config::default())
 }
@@ -104,6 +115,7 @@ fn app(cat: Shared) -> Router {
         .route("/api/health", get(|| async { "ok" }))
         .route("/api/items", get(items))
         .route("/api/recipes/{*id}", get(recipe))
+        .route("/api/producers", get(item_producers))
         .route("/api/config/default", get(default_config))
         .route("/api/config/parse", post(parse_config))
         .route("/api/plan", post(make_plan))

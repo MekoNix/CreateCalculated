@@ -286,3 +286,77 @@ fn grid_recipes_default_to_the_machine_with_least_stress() {
     req.config.allow_shaped_square_in_press = false;
     assert_eq!(machine_of(&plan(&cat, &req).unwrap()), Some(Machine::MechanicalCrafter));
 }
+
+fn edge<'a>(p: &'a Plan, from: &str, res: &str) -> &'a createcalc_core::plan::Edge {
+    p.edges.iter().find(|e| e.from == from && e.res == res).unwrap_or_else(|| panic!("no {from} {res}: {:?}", p.edges))
+}
+
+#[test]
+fn transport_counts_belts_and_funnels() {
+    let mut req = request("sheet", 700.0);
+    let p = plan(&catalog(), &req).unwrap();
+    let t = edge(&p, "recipe:cheap_sheet", "sheet").transport.clone().unwrap();
+    // 256 RPM carries 640 stacks a minute, a funnel moves 150.
+    assert_eq!((t.stack, t.belts, t.funnels), (1, 2, 5));
+    close(t.min_belt_rpm, 280.0);
+    assert!(!t.needs_buffer);
+
+    req.stack_sizes.insert("sheet".into(), 16);
+    req.belt_rpm = Some(32.0);
+    let p = plan(&catalog(), &req).unwrap();
+    let t = edge(&p, "recipe:cheap_sheet", "sheet").transport.clone().unwrap();
+    assert_eq!((t.stack, t.belts, t.funnels), (16, 1, 1));
+    close(t.min_belt_rpm, 17.5);
+    // A press makes one sheet at a time, so stacks of 16 must collect somewhere first.
+    assert!(t.needs_buffer);
+}
+
+#[test]
+fn a_batching_machine_sets_the_stack_it_receives() {
+    let mut req = request("iron", 60.0);
+    req.batch = 16;
+    let p = plan(&catalog(), &req).unwrap();
+    assert_eq!(edge(&p, "gather:raw_iron", "raw_iron").transport.as_ref().unwrap().stack, 16);
+    assert_eq!(edge(&p, "recipe:crush_iron", "crushed_iron").transport.as_ref().unwrap().stack, 16);
+}
+
+#[test]
+fn a_node_is_named_after_what_it_is_used_for() {
+    let cat = Catalog::new(Bundle {
+        recipes: vec![
+            recipe("wash", RecipeKind::Splashing, vec![stack("gravel", 1.0)], vec![out("flint", 1.0, 0.25), out("nugget", 1.0, 0.125)]),
+            recipe("craft_nugget", RecipeKind::Mixing, vec![stack("ingot", 1.0)], vec![out("nugget", 9.0, 1.0)]),
+        ],
+        ..Default::default()
+    });
+    let mut req = request("nugget", 60.0);
+    req.base_resources = Some(vec!["gravel".into()]);
+    let p = plan(&cat, &req).unwrap();
+    let info = |p: &Plan| p.nodes.iter().find_map(|n| match &n.kind {
+        NodeKind::Recipe { recipe, produces, alternatives, .. } if recipe == "wash" => Some((produces.clone(), alternatives.clone())),
+        _ => None,
+    });
+    let (produces, alternatives) = info(&p).unwrap();
+    assert_eq!(produces, "nugget");
+    // Alternatives are for the item in use, not for the recipe's first output.
+    assert_eq!(alternatives, ["craft_nugget"]);
+
+    // Forcing a recipe also removes the item as a by-product of others, and the rest stay listed.
+    req.recipe_choice.insert("nugget".into(), "craft_nugget".into());
+    let p = plan(&cat, &req).unwrap();
+    assert!(info(&p).is_none());
+    let others = p.nodes.iter().find_map(|n| match &n.kind {
+        NodeKind::Recipe { alternatives, .. } => Some(alternatives.clone()),
+        _ => None,
+    });
+    assert_eq!(others.unwrap(), ["wash"]);
+}
+
+#[test]
+fn producers_list_main_output_first() {
+    let cat = catalog();
+    let cfg = Default::default();
+    let ids: Vec<&str> = createcalc_core::plan::producers(&cat, "sheet", &cfg).iter().map(|r| r.id.as_str()).collect();
+    assert_eq!(ids, ["cheap_sheet", "dear_sheet"]);
+    assert!(createcalc_core::plan::producers(&cat, "zinc", &cfg).is_empty());
+}
