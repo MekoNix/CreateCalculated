@@ -1,0 +1,30 @@
+[package]
+name = "createcalc-server"
+version.workspace = true
+edition.workspace = true
+description = "HTTP API for the Create production planner"
+
+[lib]
+name = "createcalc_server"
+
+[[bin]]
+name = "createcalc-server"
+path = "src/main.rs"
+
+[[bin]]
+name = "createcalc-vercel"
+path = "src/bin/vercel.rs"
+required-features = ["vercel"]
+
+[features]
+vercel = ["dep:vercel_runtime", "dep:tower"]
+
+[dependencies]
+createcalc-core = { path = "../core" }
+serde.workspace = true
+serde_json.workspace = true
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
+tower-http = { version = "0.6", features = ["cors"] }
+tower = { version = "0.5", optional = true }
+vercel_runtime = { version = "2.4", features = ["axum"], optional = true }

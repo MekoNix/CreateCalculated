@@ -1,0 +1,72 @@
+# Items that stand for a tag when any member of it would do.
+# A tag takes the first item below that belongs to it, unless another member is really cheaper,
+# for example left over from the scheme or taken from stock.
+# item | English name | Russian name | tag whose other members are the same thing
+# With a name the item is shown under it everywhere, its picture stays the game's one.
+# Other members of the last column's tag are left out of the item search.
+# Tags with members that really differ, such as iron or zinc nuggets, are not listed.
+
+# Wood: the species is only a skin, so oak stands for all of them.
+minecraft:oak_log | Wood | Дерево | #minecraft:logs
+minecraft:oak_wood | Wood Block | Древесный блок
+minecraft:stripped_oak_log | Stripped Wood | Обтёсанное дерево | #c:stripped_logs
+minecraft:stripped_oak_wood | Stripped Wood Block | Обтёсанный древесный блок | #c:stripped_woods
+minecraft:oak_planks | Planks | Доски | #minecraft:planks
+minecraft:oak_slab | Wooden Slab | Деревянная плита | #minecraft:wooden_slabs
+minecraft:oak_stairs | Wooden Stairs | Деревянные ступеньки | #minecraft:wooden_stairs
+minecraft:oak_fence | Wooden Fence | Деревянный забор | #minecraft:wooden_fences
+minecraft:oak_fence_gate | Wooden Fence Gate | Деревянная калитка | #c:fence_gates/wooden
+minecraft:oak_door | Wooden Door | Деревянная дверь | #minecraft:wooden_doors
+minecraft:oak_trapdoor | Wooden Trapdoor | Деревянный люк | #minecraft:wooden_trapdoors
+minecraft:oak_button | Wooden Button | Деревянная кнопка | #minecraft:wooden_buttons
+minecraft:oak_pressure_plate | Wooden Pressure Plate | Деревянная нажимная плита | #minecraft:wooden_pressure_plates
+minecraft:oak_sapling | Sapling | Саженец | #minecraft:saplings
+minecraft:oak_leaves | Leaves | Листва | #minecraft:leaves
+
+# Dyed items: the undyed or white one, colours stay separate items you can ask for.
+minecraft:white_wool
+minecraft:white_carpet
+minecraft:white_bed
+create:white_seat
+create:white_postbox
+create:white_table_cloth
+create:copper_valve_handle
+
+# Glass: plain glass, framed and tiled ones are made from it.
+minecraft:glass
+minecraft:glass_pane
+
+# Stone: the plain block of each kind.
+minecraft:stone
+minecraft:cobblestone
+minecraft:stone_slab
+minecraft:andesite
+minecraft:calcite
+minecraft:deepslate
+minecraft:diorite
+minecraft:dripstone_block
+minecraft:granite
+minecraft:tuff
+create:asurine
+create:crimsite
+create:limestone
+create:ochrum
+create:scorchia
+create:scoria
+create:veridium
+
+# Other blocks and items with a plain form.
+minecraft:sand
+minecraft:dirt
+minecraft:coal
+minecraft:obsidian
+minecraft:soul_sand
+minecraft:chest
+minecraft:copper_block
+minecraft:quartz_block
+minecraft:purpur_block
+minecraft:sandstone
+minecraft:red_sandstone
+minecraft:dandelion
+minecraft:brain_coral
+create:zinc_ore

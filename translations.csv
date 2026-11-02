@@ -1,0 +1,256 @@
+key,English,Russian
+pageTitle,Production calculator for Create mod and Create addons,Калькулятор производства для Create и аддонов
+addItem,Add an item,Добавить предмет
+newRate,"Rate for new items, per minute","Скорость для новых предметов, в минуту"
+perMin,/min,/мин
+mb,mB,мБ
+modeNormal,Normal,Обычный
+modeAuto,Full automation,Полная автоматизация
+recipes,Recipes,Рецепты
+stressBuildings,Stress and buildings,Нагрузка и здания
+targets,Targets,Цели
+branches,Branches,Отростки
+materials,Materials,Материалы
+whatToBuild,What to build,Что построить
+buildMaterials,Materials for the whole build,Материалы на всю постройку
+materialsNote,"Belts are counted as lines. Shafts, pipes, pumps, power sources and what stands in fan streams (water, lava, fire) are not included.","Лента указана по числу линий. Валы, трубы, насосы, источники энергии и то, что стоит в потоке вентиляторов (вода, лава, огонь), не входят."
+copy,Copy,Скопировать
+settings,Settings,Настройки
+scheme,Scheme,Схема
+heat,Heat: burners and fuel,Нагрев: бёрнеры и топливо
+askFirst,Ask before changing a recipe,Спрашивать перед сменой рецепта
+beltRpm,Belt RPM,RPM лент
+batch,Machine batch,Партия машин
+beltStack,Stack on a belt,Стопка на ленте
+sails,Sails per windmill,Парусов на мельницу
+createConfig,Create config,Конфиг Create
+maxRpm,RPM limit,Предел RPM
+fanTime,"Fan time, ticks","Время вентилятора, тиков"
+bulkPress,Press takes a whole stack,Пресс берёт стопку целиком
+bulkCut,Saw takes a whole stack,Пила берёт стопку целиком
+square,Square recipes in the press,Квадратные рецепты в прессе
+shapeless,Shapeless recipes in the mixer,Бесформенные рецепты в миксере
+crafter,Regular crafting in the crafter,Обычный крафт в крафтере
+stonecut,Stonecutting on the saw,Камнерез на пиле
+loadToml,Load create-server.toml,Загрузить create-server.toml
+reset,Reset,Сбросить
+close,Close,Закрыть
+zoomOut,Zoom out,Отдалить
+zoomIn,Zoom in,Приблизить
+fit,Fit,Вписать
+tipRpm,Speed of the machines in the scheme. A recipe can have its own on its card.,Скорость машин в схеме. Отдельному рецепту можно задать свою на его карточке.
+tipNormal,"Ore, logs and other raw materials count as gathered, the scheme starts from them.","Руда, брёвна и другое сырьё считаются добытыми, схема начинается с них."
+tipAuto,"Machines make all they can: drills give cobblestone and stone, the rest comes from those, then farms. What still needs mining by hand is named under stress.","Всё, что можно, делают машины: булыжник и камень дрелями, остальное из них. Дальше идут фермы. То, что придётся добывать вручную, названо в нагрузке."
+tipHeat,Show on cards and under stress how many burners and how much fuel heated recipes need. It does not change which recipes are chosen.,"Показывать на карточках и в нагрузке, сколько бёрнеров и топлива нужно рецептам с нагревом. На выбор рецептов не влияет."
+tipAsk,"Before a recipe is replaced, show how resources and stress would change. When off, the recipe changes at once.","Перед заменой рецепта показать, как изменятся ресурсы и нагрузка. Выключено: рецепт меняется сразу."
+tipBelt,"Speed of the belts, which sets how many belts a flow needs. Empty: the same as the machines.","Скорость лент. От неё зависит, сколько лент нужно на поток. Пусто: как у машин."
+tipBatch,How many items a machine handles at once. Applies to crushing wheels and fans: a larger batch takes longer but gives more per minute.,"Сколько предметов машина обрабатывает за раз. Действует на дробильные колёса и вентиляторы: большая партия идёт дольше, но за минуту выходит больше."
+tipStack,How many items lie in one stack on a belt. Larger stacks need fewer belts for the same flow. A source handing over less than a stack needs a chest and a filtered funnel.,"Сколько предметов лежит в одной стопке на ленте. Больше стопка: меньше лент на тот же поток. Если источник отдаёт меньше стопки за раз, нужен ящик и воронка с фильтром."
+tipSails,"How many sail blocks one windmill has. Every 8 sails give 1 RPM, up to 16 RPM. Used only to count windmills under stress.","Сколько блоков парусов у одной мельницы. Каждые 8 парусов дают 1 RPM, но не больше 16 RPM. Нужно только для подсчёта мельниц в нагрузке."
+tipMax,"maxRotationSpeed in create-server.toml, 256 by default. The game allows no higher speed, and neither does the calculator.","maxRotationSpeed в create-server.toml, по умолчанию 256. Скорость выше этой игра не даст, и расчёт её не примет."
+tipFan,"fanProcessingTime in create-server.toml, 150 by default. How many ticks an item is processed in a fan stream.","fanProcessingTime в create-server.toml, по умолчанию 150. Сколько тиков предмет обрабатывается в потоке вентилятора."
+tipBulkPress,"bulkPressing in create-server.toml, off by default. The press handles a whole stack on a belt in one go.","bulkPressing в create-server.toml, по умолчанию выключено. Пресс обрабатывает на ленте всю стопку за один ход."
+tipBulkCut,"bulkCutting in create-server.toml, off by default. The saw handles a whole stack in one go.","bulkCutting в create-server.toml, по умолчанию выключено. Пила обрабатывает всю стопку за один ход."
+tipSquare,"allowShapedSquareInPress in create-server.toml, on by default. A press with a basin does 2×2 and 3×3 crafting, such as blocks from ingots.","allowShapedSquareInPress в create-server.toml, по умолчанию включено. Пресс с бассейном делает крафты 2×2 и 3×3, например блоки из слитков."
+tipShapeless,"allowShapelessInMixer in create-server.toml, on by default. A mixer with a basin does shapeless crafting.","allowShapelessInMixer в create-server.toml, по умолчанию включено. Миксер с бассейном делает бесформенные крафты."
+tipCrafter,"allowRegularCraftingInCrafter in create-server.toml, on by default. Mechanical crafters do regular crafting table recipes.","allowRegularCraftingInCrafter в create-server.toml, по умолчанию включено. Механический крафтер делает обычные рецепты верстака."
+tipStone,"allowStonecuttingOnSaw in create-server.toml, on by default. The mechanical saw does stonecutter recipes.","allowStonecuttingOnSaw в create-server.toml, по умолчанию включено. Механическая пила делает рецепты камнереза."
+tipToml,Read the server settings from a file. It is in the world folder: serverconfig/create-server.toml.,Прочитать настройки сервера из файла. Он лежит в папке мира: serverconfig/create-server.toml.
+tipReset,"Bring back Create defaults, belt RPM, batch, stack and sails.","Вернуть значения Create по умолчанию, RPM лент, партию, стопку и паруса."
+cfgDefault,Create defaults.,Значения Create по умолчанию.
+cfgOwn,Custom settings.,Свои настройки.
+cfgLoaded,Loaded {0}.,Загружен {0}.
+cfgBad,Could not read the file: {0},Не удалось прочитать файл: {0}
+cfgNoServer,Config settings need a running server.,Настройки конфига доступны при запущенном сервере.
+rpmRange,RPM is out of range,RPM вне допустимого диапазона
+noServer,The server is not available,Сервер недоступен
+needServer,This needs a running server.,Нужен запущенный сервер.
+recipe,Recipe,Рецепт
+stepsCount,step | steps,шаг | шага | шагов
+batchShort,", batch {0}",", партия {0}"
+beltEach,each on a {0}-block belt,каждый на ленту {0} бл.
+beltOne,on a {0}-block belt,на ленту {0} бл.
+fanBeltTitle,One fan works on the whole belt in its stream,Один вентилятор работает на всю ленту в своём потоке
+noRpm,does not depend on RPM,от RPM не зависит
+ownRpm, (own), (свой)
+load,load {0}%,загрузка {0}%
+noSu,no SU,без SU
+superheated,superheated,перегрев
+heated,heated,нагрев
+output,output,выход
+byProductCard,by-product,побочный вывод
+fromStock,from stock,со склада
+baseResource,base resource: supply,базовый ресурс — снабжение
+byProductEdge, (by-product), (побочн.)
+byProductShort,by-product,побочн.
+perStack,by {0},по {0}
+beltsN,belts: {0},лент: {0}
+machinesCount,machine | machines,машина | машины | машин
+burnersTotal,burners {0},бёрнеры {0}
+warnUnusual,"{0}: not a usual resource, no recipe found","{0}: необычный ресурс, рецепт не найден"
+warnFan,{0}: the fan stream is too short for any belt speed,{0}: поток вентилятора слишком короткий для любой скорости ленты
+total,Total,Всего
+suByMachine,SU by machine,SU по машинам
+noMachines,No machines,Машин нет
+powerTitle,What can cover the stress (any one of these),Чем покрыть нагрузку (любой один вариант)
+windmillN,Windmill ({0} sails),Мельница ({0} парусов)
+boiler,"Boiler: {0} levels, {1} engines, {2}-block tank, water {3} mB/tick, {4} burners (or {5} seething)","Котёл: уровней {0}, двигателей {1}, бак {2} бл., вода {3} мБ/тик, бёрнеров {4} (или {5} раскалённых)"
+heatTitle,Heat,Нагрев
+burnersHeated,"Burners, heated","Бёрнеры, нагрев"
+burnersSuper,"Burners, superheated","Бёрнеры, перегрев"
+coal,Coal,Уголь
+cake,Blaze cake,Торт ифрита
+manualTitle,Needs mining by hand,Нужна ручная добыча
+notNeeded,Not needed,Не требуется
+warnings,Warnings,Предупреждения
+itemRecipes,Recipes of this item,Рецепты предмета
+machine,Machine,Машина
+ownRpmTitle,Own RPM,Свой RPM
+commonRpm,Common: {0},Общий: {0}
+speed,Speed,Скорость
+noRpmCap,Does not depend on RPM,От RPM не зависит
+cycle,Cycle,Цикл
+ticksN,{0} ticks,{0} тиков
+perStreamBlock,Per stream block,На блок потока
+perMachine,Per machine,На машину
+fanRpmNote,"Fan RPM changes only how far the stream reaches, not the processing time.","RPM вентилятора меняет только дальность потока, время обработки от него не зависит."
+batchTitle,Batch,Партия
+stepsTitle,Assembly steps,Шаги сборки
+fanTitle,Fan,Вентилятор
+beltPerFan,Belt per fan,Лента на один вентилятор
+blocksN,{0} blocks,{0} бл.
+reach,Stream reach,Дальность потока
+upToBlocks,up to {0} blocks,до {0} бл.
+maxBeltRpm,Highest belt RPM,Максимум RPM ленты
+fanNote,"One fan works on the whole belt in its stream. Put it at the start or end of a straight belt, with the catalyst between it and the belt.","Один вентилятор работает на всю ленту в своём потоке. Поставьте его в начале или конце прямой ленты, катализатор между ним и лентой."
+inputs,Inputs,Входы
+outputs,Outputs,Выходы
+none,None,Нет
+onlyTarget,Only the final target,Только конечная цель
+toStock,From stock,Со склада
+whereFrom,From,Откуда
+whereTo,Goes to,Куда идёт
+generator,Generator,Генератор
+unstock,Remove from stock,Убрать со склада
+craft,Craft,Скрафтить
+noRecipeItem,This item has no recipe.,Рецепта для этого предмета нет.
+noRecipeFound,No suitable recipe found.,Подходящий рецепт не найден.
+pickRecipe,Choose a recipe,Выберите рецепт
+fanWith,": fan, {0}",": вентилятор, {0}"
+inScheme,already in the scheme,уже в схеме
+use,Use,Использовать
+addToScheme,Add to scheme,В схему
+madeFrom,Made from,Из чего делается
+usedFor,Used for,Для чего используется
+otherItem,Another item,Другой предмет
+searchRecipes,Search recipes,Поиск по рецептам
+loading,Loading...,Загрузка...
+rawNoRecipe,No recipe: this is a raw material.,Рецепта нет: это сырьё.
+notUsed,Not used in any recipe.,Ни в одном рецепте не используется.
+leftoverNote,{0}/min left over: it can feed a new branch.,В остатке {0}/мин: можно пустить в новую ветку.
+pieces,items,шт
+fromInput,", from {0}",", из {0}"
+howMany,How many per minute,Сколько в минуту
+perMinutePh,{0} per minute,{0} в минуту
+perMinuteAria,Amount per minute,Количество в минуту
+allLeft,All that is left,Весь остаток
+cancel,Cancel,Отмена
+add,Add,Добавить
+willMake,Will make,Получится
+newResources,New resources,Новые ресурсы
+willChange,Will change,Изменится
+noLongerNeeded,No longer needed,Больше не нужно
+stressTitle,Stress,Нагрузка
+recalculated,The scheme will be recalculated,Схема будет пересчитана
+yes,Yes,Да
+noLeftover,nothing left,нет остатка
+allLeftShort,all that is left,весь остаток
+remove,Remove,Убрать
+listBuild,Build,Построить
+listMaterials,Materials,Материалы
+copied,List copied.,Список скопирован.
+flowTitle,Flow,Поток
+pipesNote,"Fluids go through pipes, which are not counted.","Жидкость идёт по трубам, они не считаются."
+stackTitle,Stack size,Размер стопки
+stackAll,For all flows of this item.,Для всех потоков этого предмета.
+beltsFunnels,Belts and funnels,Лента и воронки
+beltsAt,Belts at {0} RPM,Лент при {0} RPM
+oneFrom,One is enough from,Хватит одной от
+funnelsLoad,Funnels for loading,Воронок на загрузку
+bufferNote,"The source hands over less than a stack at a time, and stacks do not form on a belt by themselves. It needs a chest and a funnel filtered to {0} items.","Источник отдаёт меньше стопки за раз, а на ленте стопки сами не собираются. Нужен ящик и воронка с фильтром на {0} шт."
+withAxe,: axe in hand,: топор в руке
+stripNote,A deployer with an axe hits a placed log. Only the hit is counted: placing and breaking the block and axe wear are not.,Деплоер с топором бьёт по поставленному бревну. Учтён только сам удар: установка и разрушение блока и износ топора не считаются.
+addHint,Add an item. Several work too: shared parts are counted together.,Добавьте предмет. Можно сразу несколько: общие детали посчитаются вместе.
+added,added,добавлено
+github,GitHub,GitHub
+about,About,О сайте
+aboutIntro,CreateCalculated is a production calculator for Create mod and Create addons.,CreateCalculated: калькулятор производства для мода Create и аддонов к нему.
+aboutPictures,Item pictures,Картинки предметов
+aboutPicturesText,"Item pictures are rendered from the game's files and belong to their authors. Minecraft items belong to Mojang, under the Minecraft EULA. Create items belong to the Create team, their assets are All Rights Reserved. Addon items belong to the authors of the addons. This site is not affiliated with Mojang or the Create team.","Картинки предметов собраны из файлов игры и принадлежат их авторам. Предметы Minecraft принадлежат Mojang, действует Minecraft EULA. Предметы Create принадлежат команде Create, на их ассеты действует All Rights Reserved. Предметы аддонов принадлежат авторам аддонов. Этот сайт не связан с Mojang и командой Create."
+linkEula,Minecraft EULA,Minecraft EULA
+linkLicense,Create license,Лицензия Create
+linkSource,Source code,Исходный код
+machine.press,Mechanical Press,Механический пресс
+machine.mixer,Mechanical Mixer,Механический миксер
+machine.millstone,Millstone,Жернов
+machine.crushing_wheels,Crushing Wheels,Дробильные колёса
+machine.saw,Mechanical Saw,Механическая пила
+machine.deployer,Deployer,Деплоер
+machine.spout,Spout,Дозатор
+machine.item_drain,Item Drain,Слив
+machine.mechanical_crafter,Mechanical Crafter,Механический крафтер
+machine.fan,Encased Fan,Вентилятор
+machine.drill,Mechanical Drill,Механическая дрель
+machine.furnace,Furnace,Печь
+machine.blast_furnace,Blast Furnace,Плавильная печь
+machine.smoker,Smoker,Коптильня
+machine.hand,By hand,Вручную
+fan.splashing,Fan + water (washing),Вентилятор + вода (промывка)
+fan.haunting,Fan + soul fire (haunting),Вентилятор + огонь душ (преследование)
+fan.smelting,Fan + lava (smelting),Вентилятор + лава (плавка)
+fan.blasting,Fan + lava (smelting),Вентилятор + лава (плавка)
+fan.smoking,Fan + fire (smoking),Вентилятор + огонь (копчение)
+process.pressing,Pressing,Прессование
+process.compacting,Compacting,Уплотнение
+process.mixing,Mixing,Смешивание
+process.milling,Milling,Помол
+process.crushing,Crushing,Дробление
+process.cutting,Cutting,Распил
+process.deploying,Deploying,Деплоер
+process.filling,Filling,Наполнение
+process.emptying,Emptying,Слив
+process.splashing,Washing,Промывка
+process.haunting,Haunting,Преследование
+process.smelting,Smelting,Плавка
+process.blasting,Smelting,Плавка
+process.smoking,Smoking,Копчение
+process.crafting_shaped,Crafting,Крафт
+process.crafting_shapeless,Crafting,Крафт
+process.mechanical_crafting,Mechanical crafting,Механический крафт
+process.stonecutting,Stonecutting,Камнерез
+process.smithing,Smithing,Кузнечный стол
+process.sequenced_assembly,Assembly,Сборка
+power.water_wheel,Water Wheel,Водяное колесо
+power.large_water_wheel,Large Water Wheel,Большое водяное колесо
+power.windmill_bearing,Windmill (64 sails),Мельница (64 паруса)
+power.steam_engine_level,Steam engine level,Уровень паровых двигателей
+catalyst.splashing,water,вода
+catalyst.haunting,soul fire,огонь душ
+catalyst.smelting,lava or a burner,лава или бёрнер
+catalyst.blasting,lava or a burner,лава или бёрнер
+catalyst.smoking,fire or a campfire,огонь или костёр
+item.minecraft:oak_log,Wood,Дерево
+item.minecraft:oak_wood,Wood Block,Древесный блок
+item.minecraft:stripped_oak_log,Stripped Wood,Обтёсанное дерево
+item.minecraft:stripped_oak_wood,Stripped Wood Block,Обтёсанный древесный блок
+item.minecraft:oak_planks,Planks,Доски
+item.minecraft:oak_slab,Wooden Slab,Деревянная плита
+item.minecraft:oak_stairs,Wooden Stairs,Деревянные ступеньки
+item.minecraft:oak_fence,Wooden Fence,Деревянный забор
+item.minecraft:oak_fence_gate,Wooden Fence Gate,Деревянная калитка
+item.minecraft:oak_door,Wooden Door,Деревянная дверь
+item.minecraft:oak_trapdoor,Wooden Trapdoor,Деревянный люк
+item.minecraft:oak_button,Wooden Button,Деревянная кнопка
+item.minecraft:oak_pressure_plate,Wooden Pressure Plate,Деревянная нажимная плита
+item.minecraft:oak_sapling,Sapling,Саженец
+item.minecraft:oak_leaves,Leaves,Листва

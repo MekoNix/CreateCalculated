@@ -1,0 +1,1556 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Production calculator for Create mod and Create addons</title>
+<meta name="description" content="Production calculator for the Minecraft mod Create and Create addons: machines, stress, belts and materials from raw resources to the finished item.">
+<style>
+:root{--bg:#121417;--card:#1b1e23;--line:#2e3238;--line2:#3b4048;--text:#e4e6e9;--dim:#a3a8b0;--blue:#5ca6ee;--orange:#eda83c;--green:#6fd08a;--gold:#d9b65a;--red:#e07a6a}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:12px/1.35 "Segoe UI",system-ui,sans-serif;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+#canvas{position:fixed;inset:0;cursor:grab;touch-action:none;background:var(--bg)}
+#canvas.pan{cursor:grabbing}
+#world{position:absolute;left:0;top:0;width:1px;height:1px;transform-origin:0 0}
+#edges{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
+#labels{position:absolute;left:0;top:0;pointer-events:none}
+.elabel{position:absolute;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-9px);color:#8f949b;font-size:10.5px;white-space:nowrap}
+.elabel{pointer-events:auto;cursor:pointer}
+.elabel span.t{color:var(--blue)}
+.elabel span.warn,.note.warn{color:#d9a441}
+.elabel span.n{margin-top:1px;padding:0 2px;background:var(--bg);border-radius:2px;line-height:13px}
+.ic{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:2px;font-weight:600;line-height:1;letter-spacing:-.02em;user-select:none}
+.ic img{display:block;width:100%;height:100%;image-rendering:pixelated;pointer-events:none}
+.node{position:absolute;width:260px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:9px 10px 7px;cursor:pointer;user-select:none}
+.node:active{cursor:grabbing}
+.node:hover{border-color:var(--line2)}
+.node>.mach:first-child{border-top:0;margin-top:0;padding-top:0}
+.outs{border-top:1px solid var(--line);margin-top:6px;padding-top:4px}
+.outs .lbl{color:var(--dim);font-size:11px;line-height:15px;margin-bottom:2px}
+.outs .head+.head{margin-top:4px}
+.far .outs .lbl{visibility:hidden}
+.node.by{background:#17191c}
+.node.by .head .t{color:#b4b8be;font-weight:500}
+.node.by .head .r{color:#9ea3ab}
+.node.goal{border-color:var(--gold);border-width:1.5px;padding:8.5px 9.5px 6.5px}
+.node.sel{border-color:#9fb2c6}
+.node.goal.sel{border-color:#f0d58a}
+.head{display:flex;align-items:center;gap:9px}
+.head>div{flex:1;min-width:0;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.head .t{font-size:14px;font-weight:600;line-height:18px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.head .r{color:var(--blue);font-size:13px;line-height:18px;white-space:nowrap;flex:none}
+.sub{margin-top:7px;font-size:11.5px;color:var(--dim);line-height:14px}
+.sub.green{color:var(--green)}
+.sub svg{vertical-align:-2px;margin-right:3px}
+.mach{display:flex;align-items:center;gap:6px;border-top:1px solid var(--line);margin-top:7px;padding-top:6px;min-height:30px}
+.mach+.mach{border-top:0;margin-top:0;padding-top:1px}
+.mach .name{flex:1;min-width:0;font-size:13px;line-height:17px}
+.mach .proc{display:block;color:var(--dim);font-size:11.5px;line-height:15px}
+.mach .x{color:var(--orange);font-weight:600;font-size:17px;white-space:nowrap;text-align:right;line-height:20px}
+.mach .x small{display:block;color:var(--dim);font-weight:400;font-size:11px;line-height:13px}
+.rc{flex:none;align-self:stretch;background:none;border:0;padding:0 0 0 3px;color:var(--dim);font-size:12px;cursor:pointer}
+.rc:hover{color:var(--text)}
+.stats{display:grid;grid-template-columns:1fr auto;gap:1px 10px;border-top:1px solid var(--line);margin-top:6px;padding-top:5px;font-size:12px;line-height:17px;color:var(--text)}
+.stats .r2{text-align:right}
+.stats .own{color:var(--gold)}
+.stats .muted{color:var(--dim)}
+.stats .tight{color:#d9a441}
+.stats .heat{color:var(--orange)}
+.far .stats,.far .proc{visibility:hidden}
+.far .head .t{font-size:18px}
+.far .head .r{font-size:16px}
+/* Bar */
+#bar{position:fixed;left:0;right:0;top:0;height:44px;display:flex;align-items:center;gap:14px;padding:0 12px;background:#17191d;border-bottom:1px solid var(--line);z-index:5}
+.fld{display:flex;align-items:center;gap:6px;color:var(--dim)}
+.inp{height:28px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 7px;color:var(--text);outline:0}
+.inp:focus{border-color:#5a6470}
+input[type=number]{appearance:textfield}
+input[type=number]::-webkit-inner-spin-button{display:none}
+#sugg{position:fixed;display:none;z-index:6;overflow:auto;background:var(--card);border:1px solid var(--line2);border-radius:6px;padding:3px;box-shadow:0 6px 18px rgba(0,0,0,.5);scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+#sugg::-webkit-scrollbar{width:6px}
+#sugg::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+.gopt{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+.gadd{display:flex;align-items:center;gap:6px}
+#side .gadd #search{flex:1;width:auto;min-width:0}
+#side .gadd #newPer{width:58px;flex:none}
+#goalList{margin-top:6px}
+#goalList .row{gap:6px}
+#goalList .gn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#side #goalList .gper{width:62px;height:24px;flex:none}
+#sugg div{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:3px;cursor:pointer}
+#sugg div small{margin-left:auto;color:var(--dim);font-size:10px}
+#sugg div.on{background:#2a2e35}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{background:var(--bg);border:0;border-left:1px solid var(--line);height:26px;padding:0 10px;color:var(--dim);cursor:pointer}
+.seg button:first-child{border-left:0}
+.seg button.on{background:#2a2e35;color:var(--text)}
+.chk{display:flex;align-items:center;gap:6px;color:var(--text);cursor:pointer}
+.chk input{margin:0;accent-color:var(--orange)}
+#langs{flex:none}
+#totals{margin-left:auto;height:30px;background:none;border:1px solid var(--line);border-radius:4px;padding:0 10px;cursor:pointer;white-space:nowrap}
+#totals:hover,#totals.on{border-color:var(--line2);background:#22252b}
+#totals .w{color:var(--red);margin-left:6px}
+/* Panel */
+#panel{position:fixed;right:0;top:44px;bottom:0;width:340px;background:#17191d;border-left:1px solid var(--line);z-index:4;overflow:auto;padding:12px 14px 20px;display:none;scrollbar-width:none}
+#panel::-webkit-scrollbar{display:none}
+#panel.open{display:block}
+#panel h2{font-size:12.5px;font-weight:600;margin:0}
+#panel h3{font-size:10.5px;font-weight:400;color:var(--dim);margin:16px 0 5px}
+.ph{display:flex;align-items:center;gap:9px;padding-right:24px;min-height:30px}
+/* Fixed, so a long recipe list can always be closed. It goes away with the panel. */
+#close{position:fixed;right:9px;top:52px;z-index:1;width:24px;height:24px;background:#17191d;border:0;border-radius:4px;color:var(--dim);cursor:pointer;font-size:15px}
+#close:hover{color:var(--text)}
+.row{display:flex;align-items:center;gap:7px;padding:2px 0;min-height:21px}
+.row .v{margin-left:auto;white-space:nowrap;color:var(--blue)}
+.row .v.p{color:var(--text)}
+.row .d{color:var(--dim);font-size:10.5px}
+#panel select,#panel .inp{width:100%}
+#panel select{height:28px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 3px}
+#panel select option{background:var(--card)}
+.btn{height:28px;background:#22252b;border:1px solid var(--line2);border-radius:4px;padding:0 11px;cursor:pointer}
+.btn:hover:not(:disabled){background:#2c3037}
+.btn:disabled{opacity:.45;cursor:default}
+.btns{display:flex;gap:7px;flex-wrap:wrap;margin-top:16px}
+.note{color:var(--dim);font-size:10.5px;margin-top:4px}
+.warn{color:var(--red);font-size:11px;margin:3px 0}
+/* Bottom */
+#side{position:fixed;left:12px;top:56px;width:290px;max-height:calc(100vh - 118px);overflow:auto;background:#17191d;border:1px solid var(--line2);border-radius:8px;z-index:4}
+#side{scrollbar-width:none}
+#side::-webkit-scrollbar{display:none}
+#side details+details{border-top:1px solid var(--line)}
+#side summary{list-style:none;cursor:pointer;padding:10px 12px;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center;user-select:none}
+#side summary::-webkit-details-marker{display:none}
+#side summary::after{content:"\25BE";color:var(--dim)}
+#side details:not([open]) summary::after{content:"\25B8"}
+#side summary:hover{background:#1f2227}
+#side .sb{padding:0 12px 12px}
+#side h3{font-size:11px;font-weight:400;color:var(--dim);margin:10px 0 4px}
+#side .line{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:30px;font-size:12px}
+#side .chk.line{justify-content:flex-start}
+#side .inp{width:70px}
+#side .seg button{padding:0 8px}
+.btn.file{display:inline-flex;align-items:center;font-size:12px}
+.btn.file input{display:none}
+.inp.wide{width:100%;margin-top:8px}
+.seg.wide{display:flex;margin-top:8px}
+#mode button{flex:1 1 auto;white-space:nowrap}
+.seg.wide button{flex:1;padding:0 4px;font-size:11.5px}
+.rcp{border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin-top:6px;background:var(--card)}
+.rcp[hidden]{display:none}
+.rl{display:flex;justify-content:space-between;align-items:center;min-height:24px;gap:6px}
+.rt{min-width:0}
+.rn{font-weight:600;font-size:12.5px}
+.rk{display:block}
+#ask{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:20}
+#ask[hidden]{display:none}
+#askBox{width:420px;max-width:calc(100vw - 32px);max-height:calc(100vh - 80px);overflow:auto;background:#17191d;border:1px solid var(--line2);border-radius:8px;padding:14px 16px}
+#askBox h2{font-size:14px;margin:0 0 4px}
+#askBox h3{font-size:11px;font-weight:400;color:var(--dim);margin:12px 0 4px}
+#askBox .btns{justify-content:flex-end}
+#askBox p{margin:6px 0 0;line-height:1.45}
+#askBox a{color:var(--blue)}
+#askBox .links{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:12px}
+.btn.yes{background:#2d4a33;border-color:#3f6b49}
+.rf{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:3px}
+.rf .ar{color:var(--dim)}
+.chip{display:inline-flex;align-items:center;gap:3px;font-size:11.5px}
+.go{cursor:pointer}
+.chip.go:hover,.row.go:hover{color:var(--blue)}
+.btn.sm{height:22px;padding:0 7px;font-size:11px}
+.qty{display:flex;gap:6px;flex-wrap:wrap}
+.qty .inp{flex:1;min-width:120px}
+.qty .btn.on{border-color:var(--gold);color:var(--gold)}
+.rc.x{align-self:center;font-size:14px;padding:0 0 0 6px}
+#tip{position:fixed;z-index:30;max-width:290px;background:#22252b;border:1px solid var(--line2);border-radius:6px;padding:7px 9px;font-size:12px;line-height:1.4;color:var(--text);pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+#tip[hidden]{display:none}
+#side .line[data-tip]:hover{background:#1f2227}
+/* Right of the sidebar and under the bar: nothing else stands there, so a long error can wrap freely. */
+#status{position:fixed;left:314px;top:52px;color:var(--dim);z-index:5;max-width:calc(100vw - 326px)}
+#status.err{color:var(--red);background:#17191d;border:1px solid var(--line);border-radius:4px;padding:3px 7px}
+#panel.open~#status{max-width:max(140px,calc(100vw - 666px))}
+/* The sidebar leaves 62px under itself, this row fits in them. */
+#foot{position:fixed;left:12px;bottom:10px;display:flex;gap:4px;z-index:3}
+#foot a{display:inline-flex;align-items:center;gap:5px;text-decoration:none}
+#foot a,#foot button{padding:0 8px}
+#zoom{position:fixed;right:12px;bottom:10px;display:flex;gap:4px;z-index:5;align-items:center;color:var(--dim)}
+#zoom button,#zPct,#foot a,#foot button{height:24px;min-width:24px;background:#17191d;border:1px solid var(--line);border-radius:4px;color:var(--dim)}
+#zoom button,#foot a,#foot button{cursor:pointer}
+#zoom button:hover,#foot a:hover,#foot button:hover{color:var(--text)}
+#zPct{min-width:42px;line-height:22px;text-align:center}
+/* The panel takes the right edge, so the control stands beside it. With no room there it stays reachable on top of the panel. */
+#panel.open~#zoom{right:min(352px,calc(100vw - 172px))}
+/* Too narrow to share the bottom row with #foot: one row higher, still under the sidebar. */
+@media (max-width:680px){#panel.open~#zoom{bottom:36px}}
+</style>
+</head>
+<body>
+<div id="canvas"><div id="world"><svg id="edges"></svg><div id="labels"></div><div id="nodes"></div></div></div>
+<header id="bar">
+  <button id="jeiBtn" class="btn" data-t="recipes"></button>
+  <button id="totals" data-t-title="stressBuildings"></button>
+</header>
+<div id="ask" hidden><div id="askBox" role="dialog" aria-modal="true"></div></div>
+<aside id="side">
+  <details id="sGoal" open><summary data-t="targets"></summary><div class="sb">
+    <div class="gadd"><input id="search" class="inp" data-t-ph="addItem" data-t-aria="addItem" autocomplete="off" spellcheck="false"><input id="newPer" class="inp" type="number" min="0.01" step="any" value="60" data-t-title="newRate" data-t-aria="newRate"><span class="d" data-t="perMin"></span></div>
+    <div id="goalList"></div>
+    <div class="seg wide" id="mode"><button data-v="normal" data-t="modeNormal" data-tip="tipNormal"></button><button data-v="full_auto" data-t="modeAuto" data-tip="tipAuto"></button></div>
+    <div class="gopt"><label class="fld" data-tip="tipRpm"><input id="rpm" class="inp" type="number" min="1" step="any" style="width:58px"> RPM</label><div class="seg" id="langs"><button data-v="ru">RU</button><button data-v="en">EN</button></div></div>
+  </div></details>
+  <details id="sBr" open hidden><summary data-t="branches"></summary><div class="sb" id="brBody"></div></details>
+  <details id="sMat" open hidden><summary data-t="materials"></summary><div class="sb">
+    <h3 data-t="whatToBuild"></h3><div id="matBuild"></div>
+    <h3 data-t="buildMaterials"></h3><div id="matRaw"></div>
+    <div class="note" data-t="materialsNote"></div>
+    <div class="btns"><button class="btn" id="bCopy" data-t="copy"></button></div><div class="note" id="bNote"></div>
+  </div></details>
+  <details id="sSet"><summary data-t="settings"></summary><div class="sb">
+    <h3 data-t="scheme"></h3>
+    <label class="chk line" data-tip="tipHeat"><input id="heat" type="checkbox"> <span data-t="heat"></span></label>
+    <label class="chk line" data-tip="tipAsk"><input id="cAsk" type="checkbox"> <span data-t="askFirst"></span></label>
+    <label class="fld line" data-tip="tipBelt"><span data-t="beltRpm"></span><input id="belt" class="inp" type="number" min="1" step="any"></label>
+    <div class="fld line" data-tip="tipBatch"><span data-t="batch"></span><div class="seg" id="dBatch"></div></div>
+    <div class="fld line" data-tip="tipStack"><span data-t="beltStack"></span><div class="seg" id="dStack"></div></div>
+    <label class="fld line" data-tip="tipSails"><span data-t="sails"></span><input id="cSails" class="inp" type="number" min="8" step="8"></label>
+    <h3 data-t="createConfig"></h3>
+    <label class="fld line" data-tip="tipMax"><span data-t="maxRpm"></span><input id="cMax" class="inp" type="number" min="1" step="any"></label>
+    <label class="fld line" data-tip="tipFan"><span data-t="fanTime"></span><input id="cFan" class="inp" type="number" min="1" step="1"></label>
+    <label class="chk line" data-tip="tipBulkPress"><input id="cBulkPress" type="checkbox"> <span data-t="bulkPress"></span></label>
+    <label class="chk line" data-tip="tipBulkCut"><input id="cBulkCut" type="checkbox"> <span data-t="bulkCut"></span></label>
+    <label class="chk line" data-tip="tipSquare"><input id="cSquare" type="checkbox"> <span data-t="square"></span></label>
+    <label class="chk line" data-tip="tipShapeless"><input id="cShapeless" type="checkbox"> <span data-t="shapeless"></span></label>
+    <label class="chk line" data-tip="tipCrafter"><input id="cCrafter" type="checkbox"> <span data-t="crafter"></span></label>
+    <label class="chk line" data-tip="tipStone"><input id="cStone" type="checkbox"> <span data-t="stonecut"></span></label>
+    <div class="btns"><label class="btn file" data-tip="tipToml"><span data-t="loadToml"></span><input id="cFile" type="file" accept=".toml"></label><button class="btn" id="cReset" data-t="reset" data-tip="tipReset"></button></div>
+    <div class="note" id="cNote"></div>
+  </div></details>
+</aside>
+<aside id="panel"><button id="close" data-t-aria="close">&times;</button><div id="panelBody"></div></aside>
+<div id="sugg"></div>
+<div id="zoom"><button id="zOut" data-t-aria="zoomOut">&minus;</button><span id="zPct"></span><button id="zIn" data-t-aria="zoomIn">+</button><button id="zFit" data-t="fit"></button></div>
+<div id="foot"><a href="https://github.com/MekoNix/CreateCalculated" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span data-t="github"></span></a><button id="aboutBtn" data-t="about"></button></div>
+<div id="tip" hidden></div>
+<div id="status"></div>
+<script>
+'use strict';
+// Opened from the server it talks to that server, opened as a file it looks for a local one.
+const API = location.protocol === 'file:' ? 'http://127.0.0.1:3000' : location.origin;
+const W = 260, GAP_X = 104, GAP_Y = 30, DUMMY_H = 40;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- Language: every text as [Russian, English] ---------- */
+const STR = {
+  pageTitle:['Калькулятор производства для Create и аддонов','Production calculator for Create mod and Create addons'],
+  addItem:['Добавить предмет','Add an item'], newRate:['Скорость для новых предметов, в минуту','Rate for new items, per minute'], perMin:['/мин','/min'], mb:['мБ','mB'],
+  modeNormal:['Обычный','Normal'], modeAuto:['Полная автоматизация','Full automation'], recipes:['Рецепты','Recipes'], stressBuildings:['Нагрузка и здания','Stress and buildings'],
+  targets:['Цели','Targets'], branches:['Отростки','Branches'], materials:['Материалы','Materials'], whatToBuild:['Что построить','What to build'], buildMaterials:['Материалы на всю постройку','Materials for the whole build'],
+  materialsNote:['Лента указана по числу линий. Валы, трубы, насосы, источники энергии и то, что стоит в потоке вентиляторов (вода, лава, огонь), не входят.','Belts are counted as lines. Shafts, pipes, pumps, power sources and what stands in fan streams (water, lava, fire) are not included.'],
+  copy:['Скопировать','Copy'], settings:['Настройки','Settings'], scheme:['Схема','Scheme'], heat:['Нагрев: бёрнеры и топливо','Heat: burners and fuel'], askFirst:['Спрашивать перед сменой рецепта','Ask before changing a recipe'],
+  beltRpm:['RPM лент','Belt RPM'], batch:['Партия машин','Machine batch'], beltStack:['Стопка на ленте','Stack on a belt'], sails:['Парусов на мельницу','Sails per windmill'], createConfig:['Конфиг Create','Create config'],
+  maxRpm:['Предел RPM','RPM limit'], fanTime:['Время вентилятора, тиков','Fan time, ticks'], bulkPress:['Пресс берёт стопку целиком','Press takes a whole stack'], bulkCut:['Пила берёт стопку целиком','Saw takes a whole stack'],
+  square:['Квадратные рецепты в прессе','Square recipes in the press'], shapeless:['Бесформенные рецепты в миксере','Shapeless recipes in the mixer'], crafter:['Обычный крафт в крафтере','Regular crafting in the crafter'], stonecut:['Камнерез на пиле','Stonecutting on the saw'],
+  loadToml:['Загрузить create-server.toml','Load create-server.toml'], reset:['Сбросить','Reset'], close:['Закрыть','Close'], zoomOut:['Отдалить','Zoom out'], zoomIn:['Приблизить','Zoom in'], fit:['Вписать','Fit'],
+  tipRpm:['Скорость машин в схеме. Отдельному рецепту можно задать свою на его карточке.','Speed of the machines in the scheme. A recipe can have its own on its card.'],
+  tipNormal:['Руда, брёвна и другое сырьё считаются добытыми, схема начинается с них.','Ore, logs and other raw materials count as gathered, the scheme starts from them.'],
+  tipAuto:['Всё, что можно, делают машины: булыжник и камень дрелями, остальное из них. Дальше идут фермы. То, что придётся добывать вручную, названо в нагрузке.','Machines make all they can: drills give cobblestone and stone, the rest comes from those, then farms. What still needs mining by hand is named under stress.'],
+  tipHeat:['Показывать на карточках и в нагрузке, сколько бёрнеров и топлива нужно рецептам с нагревом. На выбор рецептов не влияет.','Show on cards and under stress how many burners and how much fuel heated recipes need. It does not change which recipes are chosen.'],
+  tipAsk:['Перед заменой рецепта показать, как изменятся ресурсы и нагрузка. Выключено: рецепт меняется сразу.','Before a recipe is replaced, show how resources and stress would change. When off, the recipe changes at once.'],
+  tipBelt:['Скорость лент. От неё зависит, сколько лент нужно на поток. Пусто: как у машин.','Speed of the belts, which sets how many belts a flow needs. Empty: the same as the machines.'],
+  tipBatch:['Сколько предметов машина обрабатывает за раз. Действует на дробильные колёса и вентиляторы: большая партия идёт дольше, но за минуту выходит больше.','How many items a machine handles at once. Applies to crushing wheels and fans: a larger batch takes longer but gives more per minute.'],
+  tipStack:['Сколько предметов лежит в одной стопке на ленте. Больше стопка: меньше лент на тот же поток. Если источник отдаёт меньше стопки за раз, нужен ящик и воронка с фильтром.','How many items lie in one stack on a belt. Larger stacks need fewer belts for the same flow. A source handing over less than a stack needs a chest and a filtered funnel.'],
+  tipSails:['Сколько блоков парусов у одной мельницы. Каждые 8 парусов дают 1 RPM, но не больше 16 RPM. Нужно только для подсчёта мельниц в нагрузке.','How many sail blocks one windmill has. Every 8 sails give 1 RPM, up to 16 RPM. Used only to count windmills under stress.'],
+  tipMax:['maxRotationSpeed в create-server.toml, по умолчанию 256. Скорость выше этой игра не даст, и расчёт её не примет.','maxRotationSpeed in create-server.toml, 256 by default. The game allows no higher speed, and neither does the calculator.'],
+  tipFan:['fanProcessingTime в create-server.toml, по умолчанию 150. Сколько тиков предмет обрабатывается в потоке вентилятора.','fanProcessingTime in create-server.toml, 150 by default. How many ticks an item is processed in a fan stream.'],
+  tipBulkPress:['bulkPressing в create-server.toml, по умолчанию выключено. Пресс обрабатывает на ленте всю стопку за один ход.','bulkPressing in create-server.toml, off by default. The press handles a whole stack on a belt in one go.'],
+  tipBulkCut:['bulkCutting в create-server.toml, по умолчанию выключено. Пила обрабатывает всю стопку за один ход.','bulkCutting in create-server.toml, off by default. The saw handles a whole stack in one go.'],
+  tipSquare:['allowShapedSquareInPress в create-server.toml, по умолчанию включено. Пресс с бассейном делает крафты 2×2 и 3×3, например блоки из слитков.','allowShapedSquareInPress in create-server.toml, on by default. A press with a basin does 2×2 and 3×3 crafting, such as blocks from ingots.'],
+  tipShapeless:['allowShapelessInMixer в create-server.toml, по умолчанию включено. Миксер с бассейном делает бесформенные крафты.','allowShapelessInMixer in create-server.toml, on by default. A mixer with a basin does shapeless crafting.'],
+  tipCrafter:['allowRegularCraftingInCrafter в create-server.toml, по умолчанию включено. Механический крафтер делает обычные рецепты верстака.','allowRegularCraftingInCrafter in create-server.toml, on by default. Mechanical crafters do regular crafting table recipes.'],
+  tipStone:['allowStonecuttingOnSaw в create-server.toml, по умолчанию включено. Механическая пила делает рецепты камнереза.','allowStonecuttingOnSaw in create-server.toml, on by default. The mechanical saw does stonecutter recipes.'],
+  tipToml:['Прочитать настройки сервера из файла. Он лежит в папке мира: serverconfig/create-server.toml.','Read the server settings from a file. It is in the world folder: serverconfig/create-server.toml.'],
+  tipReset:['Вернуть значения Create по умолчанию, RPM лент, партию, стопку и паруса.','Bring back Create defaults, belt RPM, batch, stack and sails.'],
+  cfgDefault:['Значения Create по умолчанию.','Create defaults.'], cfgOwn:['Свои настройки.','Custom settings.'], cfgLoaded:['Загружен {0}.','Loaded {0}.'], cfgBad:['Не удалось прочитать файл: {0}','Could not read the file: {0}'], cfgNoServer:['Настройки конфига доступны при запущенном сервере.','Config settings need a running server.'],
+  rpmRange:['RPM вне допустимого диапазона','RPM is out of range'], noServer:['Сервер недоступен','The server is not available'], needServer:['Нужен запущенный сервер.','This needs a running server.'],
+  recipe:['Рецепт','Recipe'], stepsCount:[['шаг','шага','шагов'],['step','steps']], batchShort:[', партия {0}',', batch {0}'], beltEach:['каждый на ленту {0} бл.','each on a {0}-block belt'], beltOne:['на ленту {0} бл.','on a {0}-block belt'], fanBeltTitle:['Один вентилятор работает на всю ленту в своём потоке','One fan works on the whole belt in its stream'],
+  noRpm:['от RPM не зависит','does not depend on RPM'], ownRpm:[' (свой)',' (own)'], load:['загрузка {0}%','load {0}%'], noSu:['без SU','no SU'], superheated:['перегрев','superheated'], heated:['нагрев','heated'],
+  output:['выход','output'], byProductCard:['побочный вывод','by-product'], fromStock:['со склада','from stock'], baseResource:['базовый ресурс — снабжение','base resource: supply'], byProductEdge:[' (побочн.)',' (by-product)'], byProductShort:['побочн.','by-product'], perStack:['по {0}','by {0}'], beltsN:['лент: {0}','belts: {0}'],
+  machinesCount:[['машина','машины','машин'],['machine','machines']], burnersTotal:['бёрнеры {0}','burners {0}'], warnUnusual:['{0}: необычный ресурс, рецепт не найден','{0}: not a usual resource, no recipe found'], warnFan:['{0}: поток вентилятора слишком короткий для любой скорости ленты','{0}: the fan stream is too short for any belt speed'],
+  total:['Всего','Total'], suByMachine:['SU по машинам','SU by machine'], noMachines:['Машин нет','No machines'], powerTitle:['Чем покрыть нагрузку (любой один вариант)','What can cover the stress (any one of these)'], windmillN:['Мельница ({0} парусов)','Windmill ({0} sails)'],
+  boiler:['Котёл: уровней {0}, двигателей {1}, бак {2} бл., вода {3} мБ/тик, бёрнеров {4} (или {5} раскалённых)','Boiler: {0} levels, {1} engines, {2}-block tank, water {3} mB/tick, {4} burners (or {5} seething)'],
+  heatTitle:['Нагрев','Heat'], burnersHeated:['Бёрнеры, нагрев','Burners, heated'], burnersSuper:['Бёрнеры, перегрев','Burners, superheated'], coal:['Уголь','Coal'], cake:['Торт ифрита','Blaze cake'], manualTitle:['Нужна ручная добыча','Needs mining by hand'], notNeeded:['Не требуется','Not needed'], warnings:['Предупреждения','Warnings'],
+  itemRecipes:['Рецепты предмета','Recipes of this item'], machine:['Машина','Machine'], ownRpmTitle:['Свой RPM','Own RPM'], commonRpm:['Общий: {0}','Common: {0}'], speed:['Скорость','Speed'], noRpmCap:['От RPM не зависит','Does not depend on RPM'], cycle:['Цикл','Cycle'], ticksN:['{0} тиков','{0} ticks'], perStreamBlock:['На блок потока','Per stream block'], perMachine:['На машину','Per machine'],
+  fanRpmNote:['RPM вентилятора меняет только дальность потока, время обработки от него не зависит.','Fan RPM changes only how far the stream reaches, not the processing time.'], batchTitle:['Партия','Batch'], stepsTitle:['Шаги сборки','Assembly steps'], fanTitle:['Вентилятор','Fan'], beltPerFan:['Лента на один вентилятор','Belt per fan'], blocksN:['{0} бл.','{0} blocks'], reach:['Дальность потока','Stream reach'], upToBlocks:['до {0} бл.','up to {0} blocks'], maxBeltRpm:['Максимум RPM ленты','Highest belt RPM'],
+  fanNote:['Один вентилятор работает на всю ленту в своём потоке. Поставьте его в начале или конце прямой ленты, катализатор между ним и лентой.','One fan works on the whole belt in its stream. Put it at the start or end of a straight belt, with the catalyst between it and the belt.'],
+  inputs:['Входы','Inputs'], outputs:['Выходы','Outputs'], none:['Нет','None'], onlyTarget:['Только конечная цель','Only the final target'], toStock:['Со склада','From stock'], whereFrom:['Откуда','From'], whereTo:['Куда идёт','Goes to'], generator:['Генератор','Generator'], unstock:['Убрать со склада','Remove from stock'], craft:['Скрафтить','Craft'], noRecipeItem:['Рецепта для этого предмета нет.','This item has no recipe.'], noRecipeFound:['Подходящий рецепт не найден.','No suitable recipe found.'], pickRecipe:['Выберите рецепт','Choose a recipe'],
+  fanWith:[': вентилятор, {0}',': fan, {0}'], inScheme:['уже в схеме','already in the scheme'], use:['Использовать','Use'], addToScheme:['В схему','Add to scheme'], madeFrom:['Из чего делается','Made from'], usedFor:['Для чего используется','Used for'], otherItem:['Другой предмет','Another item'], searchRecipes:['Поиск по рецептам','Search recipes'], loading:['Загрузка...','Loading...'],
+  rawNoRecipe:['Рецепта нет: это сырьё.','No recipe: this is a raw material.'], notUsed:['Ни в одном рецепте не используется.','Not used in any recipe.'], leftoverNote:['В остатке {0}/мин: можно пустить в новую ветку.','{0}/min left over: it can feed a new branch.'],
+  pieces:['шт','items'], fromInput:[', из {0}',', from {0}'], howMany:['Сколько в минуту','How many per minute'], perMinutePh:['{0} в минуту','{0} per minute'], perMinuteAria:['Количество в минуту','Amount per minute'], allLeft:['Весь остаток','All that is left'], cancel:['Отмена','Cancel'], add:['Добавить','Add'], willMake:['Получится','Will make'],
+  newResources:['Новые ресурсы','New resources'], willChange:['Изменится','Will change'], noLongerNeeded:['Больше не нужно','No longer needed'], stressTitle:['Нагрузка','Stress'], recalculated:['Схема будет пересчитана','The scheme will be recalculated'], yes:['Да','Yes'], noLeftover:['нет остатка','nothing left'], allLeftShort:['весь остаток','all that is left'], remove:['Убрать','Remove'], 
+  listBuild:['Построить','Build'], listMaterials:['Материалы','Materials'], copied:['Список скопирован.','List copied.'], flowTitle:['Поток','Flow'], pipesNote:['Жидкость идёт по трубам, они не считаются.','Fluids go through pipes, which are not counted.'], stackTitle:['Размер стопки','Stack size'], stackAll:['Для всех потоков этого предмета.','For all flows of this item.'], beltsFunnels:['Лента и воронки','Belts and funnels'], beltsAt:['Лент при {0} RPM','Belts at {0} RPM'], oneFrom:['Хватит одной от','One is enough from'], funnelsLoad:['Воронок на загрузку','Funnels for loading'],
+  bufferNote:['Источник отдаёт меньше стопки за раз, а на ленте стопки сами не собираются. Нужен ящик и воронка с фильтром на {0} шт.','The source hands over less than a stack at a time, and stacks do not form on a belt by themselves. It needs a chest and a funnel filtered to {0} items.'],
+  withAxe:[': топор в руке',': axe in hand'], stripNote:['Деплоер с топором бьёт по поставленному бревну. Учтён только сам удар: установка и разрушение блока и износ топора не считаются.','A deployer with an axe hits a placed log. Only the hit is counted: placing and breaking the block and axe wear are not.'],
+  addHint:['Добавьте предмет. Можно сразу несколько: общие детали посчитаются вместе.','Add an item. Several work too: shared parts are counted together.'], added:['добавлено','added'],
+  github:['GitHub','GitHub'], about:['О сайте','About'], aboutIntro:['CreateCalculated: калькулятор производства для мода Create и аддонов к нему.','CreateCalculated is a production calculator for Create mod and Create addons.'], aboutPictures:['Картинки предметов','Item pictures'],
+  aboutPicturesText:['Картинки предметов собраны из файлов игры и принадлежат их авторам. Предметы Minecraft принадлежат Mojang, действует Minecraft EULA. Предметы Create принадлежат команде Create, на их ассеты действует All Rights Reserved. Предметы аддонов принадлежат авторам аддонов. Этот сайт не связан с Mojang и командой Create.','Item pictures are rendered from the game\'s files and belong to their authors. Minecraft items belong to Mojang, under the Minecraft EULA. Create items belong to the Create team, their assets are All Rights Reserved. Addon items belong to the authors of the addons. This site is not affiliated with Mojang or the Create team.'],
+  linkEula:['Minecraft EULA','Minecraft EULA'], linkLicense:['Лицензия Create','Create license'], linkSource:['Исходный код','Source code'],
+};
+const MACH_SRC = {press:['Механический пресс','Mechanical Press'], mixer:['Механический миксер','Mechanical Mixer'], millstone:['Жернов','Millstone'], crushing_wheels:['Дробильные колёса','Crushing Wheels'], saw:['Механическая пила','Mechanical Saw'], deployer:['Деплоер','Deployer'], spout:['Дозатор','Spout'], item_drain:['Слив','Item Drain'], mechanical_crafter:['Механический крафтер','Mechanical Crafter'], fan:['Вентилятор','Encased Fan'], drill:['Механическая дрель','Mechanical Drill'], furnace:['Печь','Furnace'], blast_furnace:['Плавильная печь','Blast Furnace'], smoker:['Коптильня','Smoker'], hand:['Вручную','By hand']};
+const FAN_SRC = {splashing:['Вентилятор + вода (промывка)','Fan + water (washing)'], haunting:['Вентилятор + огонь душ (преследование)','Fan + soul fire (haunting)'], smelting:['Вентилятор + лава (плавка)','Fan + lava (smelting)'], blasting:['Вентилятор + лава (плавка)','Fan + lava (smelting)'], smoking:['Вентилятор + огонь (копчение)','Fan + fire (smoking)']};
+const KIND_SRC = {pressing:['Прессование','Pressing'], compacting:['Уплотнение','Compacting'], mixing:['Смешивание','Mixing'], milling:['Помол','Milling'], crushing:['Дробление','Crushing'], cutting:['Распил','Cutting'], deploying:['Деплоер','Deploying'], filling:['Наполнение','Filling'], emptying:['Слив','Emptying'], splashing:['Промывка','Washing'], haunting:['Преследование','Haunting'], smelting:['Плавка','Smelting'], blasting:['Плавка','Smelting'], smoking:['Копчение','Smoking'], crafting_shaped:['Крафт','Crafting'], crafting_shapeless:['Крафт','Crafting'], mechanical_crafting:['Механический крафт','Mechanical crafting'], stonecutting:['Камнерез','Stonecutting'], smithing:['Кузнечный стол','Smithing'], sequenced_assembly:['Сборка','Assembly']};
+const SOURCES_SRC = {water_wheel:['Водяное колесо','Water Wheel'], large_water_wheel:['Большое водяное колесо','Large Water Wheel'], windmill_bearing:['Мельница (64 паруса)','Windmill (64 sails)'], steam_engine_level:['Уровень паровых двигателей','Steam engine level']};
+// What has to stand in the fan's stream, from Create's fan_processing_catalysts tags.
+const CATALYST_SRC = {splashing:['вода','water'], haunting:['огонь душ','soul fire'], smelting:['лава или бёрнер','lava or a burner'], blasting:['лава или бёрнер','lava or a burner'], smoking:['огонь или костёр','fire or a campfire']};
+let lang = 'en', L = 1, MACH, FAN, KIND, SOURCES, CATALYST;
+const t = (key, ...args) => {
+  const text = STR[key] ? STR[key][L] : key;
+  return args.length ? text.replace(/\{(\d)\}/g, (_, i) => args[i]) : text;
+};
+const pick = src => Object.fromEntries(Object.entries(src).map(([k, v]) => [k, v[L]]));
+function plural(n, key){
+  const forms = STR[key][L];
+  if (L) return n === 1 ? forms[0] : forms[1];
+  const m = n % 100, k = n % 10;
+  return m > 10 && m < 20 ? forms[2] : k === 1 ? forms[0] : k >= 2 && k <= 4 ? forms[1] : forms[2];
+}
+let noteArgs = ['cfgDefault'];
+function setNote(...args){ noteArgs = args; $('cNote').textContent = t(...args); }
+function applyLang(){
+  L = lang === 'ru' ? 0 : 1;
+  MACH = pick(MACH_SRC); FAN = pick(FAN_SRC); KIND = pick(KIND_SRC); SOURCES = pick(SOURCES_SRC); CATALYST = pick(CATALYST_SRC);
+  document.documentElement.lang = lang;
+  document.title = t('pageTitle');
+  document.querySelectorAll('[data-t]').forEach(el => { el.textContent = t(el.dataset.t); });
+  document.querySelectorAll('[data-t-ph]').forEach(el => { el.placeholder = t(el.dataset.tPh); });
+  document.querySelectorAll('[data-t-title]').forEach(el => { el.title = t(el.dataset.tTitle); });
+  document.querySelectorAll('[data-t-aria]').forEach(el => { el.setAttribute('aria-label', t(el.dataset.tAria)); });
+  document.querySelectorAll('#langs button').forEach(b => b.classList.toggle('on', b.dataset.v === lang));
+  setNote(...noteArgs);
+}
+function setLang(next){
+  if (next === lang) return;
+  lang = next;
+  $('tip').hidden = true;
+  try { localStorage.setItem('createcalc.lang', lang); } catch (e) { /* Remembering it is only a convenience. */ }
+  applyLang();
+  syncItemNames();
+  hideDrop();
+  renderTargets();
+  if (plan) show(plan, {});
+  if (!$('ask').hidden && $('aboutClose')) renderAbout();
+}
+// Explanations appear beside what the pointer or keyboard is on, the text itself is under data-tip.
+function bindTips(){
+  const box = $('tip');
+  const showTip = el => {
+    box.textContent = t(el.dataset.tip);
+    box.hidden = false;
+    const r = el.getBoundingClientRect(), w = box.offsetWidth, h = box.offsetHeight;
+    box.style.left = (r.right + 10 + w < innerWidth ? r.right + 10 : Math.max(8, r.left - w - 10)) + 'px';
+    box.style.top = (r.bottom + h + 8 < innerHeight ? Math.max(48, r.top) : Math.max(8, innerHeight - h - 8)) + 'px';
+  };
+  const on = e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) showTip(el); else box.hidden = true; };
+  document.addEventListener('mouseover', on);
+  document.addEventListener('focusin', on);
+  document.addEventListener('focusout', () => { box.hidden = true; });
+}
+
+const S = {ask:true, branches:[], batch:1, stack:1, sails:64, config:null, belt:null, stacks:{}, targets:[{item:'create:andesite_alloy', per:60}], rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
+const items = new Map();
+const recipes = new Map();
+let itemsLoaded = false, plan = null, power = null, seq = 0;
+// Which item stands for a tag, so a tag has the name and the picture of that item.
+let tagDefaults = new Map();
+const real = id => tagDefaults.get(id) || id;
+let G = {nodes:new Map(), edges:[]};
+const pins = new Map();
+let view = {x:0, y:0, k:1};
+let panel = null; // {kind:'load'} or {kind:'node', id, res}
+
+/* ---------- Text ---------- */
+function fmt(x){
+  const a = Math.abs(x);
+  const r = a >= 100 ? Math.round(x) : a >= 10 ? Math.round(x*10)/10 : Math.round(x*100)/100;
+  const [i, d] = String(r).split('.');
+  return i.replace(/\B(?=(\d{3})+$)/g, ' ') + (d ? '.' + d : '');
+}
+const isFluid = id => id.startsWith('fluid:');
+const volume = e => isFluid(e.res) ? e.per_minute / 1000 : e.per_minute; // buckets weigh like items
+const unit = id => isFluid(id) ? t('mb') : '';
+const rateText = (id, v) => fmt(v) + (isFluid(id) ? ' ' + t('mb') : '') + t('perMin');
+function readable(id){
+  const s = id.replace(/^#/, '').replace(/^fluid:/, '').split(':').pop().replace(/[_/]+/g, ' ').trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function nameOf(id){
+  const key = real(id), it = items.get(key);
+  return it && it.name && it.name !== key ? it.name : readable(key);
+}
+const isStripping = id => id.startsWith('createcalc:stripping/');
+const machineName = (m, kind) => m === 'fan' && FAN[kind] || MACH[m] || readable(m);
+
+/* ---------- Icons: pictures from createcalc-icons, letters where there is no picture ---------- */
+const MATERIALS = [
+  [/gold|golden/,'#e3bd3f'],[/brass/,'#c9a24a'],[/copper/,'#c77a4a'],[/zinc/,'#8fb0ae'],[/iron|andesite_alloy/,'#a7abb0'],
+  [/quartz/,'#ece8e0'],[/soul_sand/,'#6e5340'],[/red_sand/,'#c0683a'],[/sand/,'#dcc98e'],[/gravel/,'#85817c'],[/flint/,'#44464a'],
+  [/cobble/,'#7c7c7c'],[/diorite/,'#c9c8c4'],[/andesite/,'#8b8d8c'],[/granite/,'#99695a'],[/stone/,'#7f8082'],[/clay/,'#9aa4b2'],
+  [/lava/,'#d9662a'],[/water/,'#3f76c4'],[/redstone/,'#b8352b'],[/coal|blaze_cake/,'#2f3033'],[/spruce|oak|birch|planks|wood|log/,'#8a6a42'],
+  [/terracotta/,'#a5694e'],[/lapis/,'#2f55a8'],[/diamond/,'#62d0cf'],[/emerald/,'#3fb56a'],[/obsidian/,'#2e2640'],[/dead_bush/,'#8c6a3a']];
+const PALETTE = ['#6d8bb0','#8f7cb5','#7ca37f','#b08a6d','#5f9ea0','#a7798f','#8e9a5b','#b3a066','#6b7fa6','#9c7a62','#6c9c8b','#9a6f6f','#7d8899','#a08fb0','#7f9c63','#b08c8c'];
+function hash(s){ let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
+function iconColor(id){
+  const key = id.replace(/^fluid:/, '').split(':').pop();
+  for (const [re, c] of MATERIALS) if (re.test(key)) return c;
+  return PALETTE[hash(id) % PALETTE.length];
+}
+function iconLetters(name){
+  const w = name.replace(/[()+,.]/g, ' ').split(/\s+/).filter(Boolean);
+  if (w.length > 1) return (w[0][0] + w[1][0]).toUpperCase();
+  return (w[0] || '?').slice(0, 2).replace(/^./, c => c.toUpperCase());
+}
+function letterIcon(id, name, size, machine){
+  const c = machine ? '#3c4047' : iconColor(id);
+  const n = parseInt(c.slice(1), 16), lum = .299*(n>>16) + .587*(n>>8&255) + .114*(n&255);
+  const text = machine ? '#d8dade' : lum > 130 ? '#1a1b1e' : '#f1f1f1';
+  return `<span class="ic" style="width:${size}px;height:${size}px;background:${c};color:${text};font-size:${Math.round(size*.46)}px">${esc(iconLetters(name))}</span>`;
+}
+// Undefined until the index answers, so nothing shows letters on its way to a picture.
+let iconUrls;
+// Holding a loaded picture lets a redrawn card paint it at once, without a request or a flash.
+const iconImages = new Map();
+function icon(id, name, size, machine){
+  const box = `data-ic="${esc(id)}" data-ic-name="${esc(name)}" data-ic-size="${size}"${machine ? ' data-ic-machine="1"' : ''} style="width:${size}px;height:${size}px"`;
+  if (!iconUrls) return `<span class="ic" data-ic-wait="1" ${box}></span>`;
+  const url = iconUrls.get(id);
+  if (!url) return letterIcon(id, name, size, machine);
+  if (!iconImages.has(url)) { const im = new Image(); im.src = url; iconImages.set(url, im); }
+  return `<span class="ic" ${box}><img src="${esc(url)}" alt="" decoding="sync" draggable="false"></span>`;
+}
+function redrawIcon(el){
+  const d = el.dataset;
+  el.outerHTML = icon(d.ic, d.icName, +d.icSize, !!d.icMachine);
+}
+fetch(API + '/api/icons/index.json', {signal:AbortSignal.timeout(3000)})
+  .then(r => r.ok ? r.json() : null)
+  .catch(() => null)
+  .then(index => {
+    iconUrls = new Map(Object.entries(index && index.icons || {}).map(([id, path]) => [id, `${API}/api/icons/${path}?v=${index.version}`]));
+    document.querySelectorAll('.ic[data-ic-wait]').forEach(redrawIcon);
+  });
+// A picture that fails to load, say after the folder was removed, goes back to letters for good.
+addEventListener('error', e => {
+  const box = e.target.parentElement;
+  if (e.target.tagName !== 'IMG' || !box || !box.dataset.ic) return;
+  iconUrls.delete(box.dataset.ic);
+  redrawIcon(box);
+}, true);
+const itemIcon = (id, size) => icon(real(id), nameOf(id), size);
+// The item that stands for a machine. Working by hand has no block, so it keeps its letters.
+const MACHINE_ITEM = {press:'create:mechanical_press', mixer:'create:mechanical_mixer', millstone:'create:millstone', crushing_wheels:'create:crushing_wheel', saw:'create:mechanical_saw', deployer:'create:deployer', spout:'create:spout', item_drain:'create:item_drain', mechanical_crafter:'create:mechanical_crafter', fan:'create:encased_fan', drill:'create:mechanical_drill', furnace:'minecraft:furnace', blast_furnace:'minecraft:blast_furnace', smoker:'minecraft:smoker'};
+const machineIcon = (m, size) => icon(MACHINE_ITEM[m] || 'machine:' + m, MACH[m] || m, size, true);
+function tint(hex){ // muted item colour for edges
+  const n = parseInt(hex.slice(1), 16), base = 142, t = .32;
+  const mix = v => Math.round(base + (v - base)*t);
+  return `rgb(${mix(n>>16)},${mix(n>>8&255)},${mix(n&255)})`;
+}
+
+/* ---------- Server ---------- */
+async function api(path, body){
+  const r = await fetch(API + path, body === undefined ? {} : {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(body)});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.error || 'HTTP ' + r.status); e.http = true; throw e; }
+  return data;
+}
+async function loadItems(){
+  if (itemsLoaded) return;
+  const [en, ru, defaults] = await Promise.all([api('/api/items?limit=5000&lang=en'), api('/api/items?limit=5000&lang=ru'), api('/api/tags/defaults')]);
+  const russian = new Map(ru.map(it => [it.id, it.name]));
+  for (const it of en) items.set(it.id, {...it, en:it.name, ru:russian.get(it.id) || it.name});
+  syncItemNames();
+  tagDefaults = new Map(Object.entries(defaults));
+  itemsLoaded = true;
+}
+function syncItemNames(){
+  for (const it of items.values()) it.name = it[lang];
+}
+function loadRecipe(id){
+  if (recipes.has(id)) return Promise.resolve(recipes.get(id));
+  return api('/api/recipes/' + encodeURI(id)).then(r => (recipes.set(id, r), r));
+}
+function request(){
+  return {targets:S.targets.map(x => ({item:x.item, per_minute:x.per})), rpm:S.rpm, mode:S.mode, include_heat:S.heat, stock:S.stock, recipe_choice:S.choice, overrides:S.overrides, belt_rpm:S.belt, stack_sizes:S.stacks, branches:S.branches, batch:S.batch, stack:S.stack, ...(S.config ? {config:S.config} : {})};
+}
+const mainRes = r => r && r.outputs[0] ? r.outputs[0].res : null;
+const outputRate = (n, r, res) => n.runs_per_min * r.outputs.filter(o => o.res === res).reduce((s, o) => s + o.amount * o.chance, 0);
+const nodeRes = n => n.type === 'recipe' ? (n.produces || mainRes(recipes.get(n.recipe))) : n.res;
+
+const EMPTY_PLAN = {nodes:[], edges:[], total_su:0, machines:{}, heat:null, warnings:[], manual:[], build:[], branches:[]};
+async function replan(opts = {}){
+  const my = ++seq;
+  if (!S.targets.length) {
+    // Branches hang off a scheme, so with nothing left to make they go too.
+    S.branches = [];
+    power = null;
+    setStatus('');
+    show(EMPTY_PLAN, opts);
+    return;
+  }
+  try {
+    await loadItems();
+    const p = await api('/api/plan', request());
+    await Promise.all(p.nodes.filter(n => n.type === 'recipe').map(n => loadRecipe(n.recipe)));
+    if (my !== seq) return;
+    setStatus('');
+    show(p, opts);
+    api('/api/power', {su:p.total_su, sails:S.sails, ...(S.config ? {config:S.config} : {})}).then(r => { if (my === seq) { power = r; if (panel && panel.kind === 'load') renderPanel(); } }).catch(() => {});
+  } catch (e) {
+    if (my !== seq) return;
+    setStatus(e.http ? (/^invalid request: rpm/.test(e.message) ? t('rpmRange') : e.message) : t('noServer'), true);
+  }
+}
+function setStatus(t, err){ const s = $('status'); s.textContent = t; s.className = err ? 'err' : ''; }
+
+function show(p, opts){
+  const oldRes = new Map();
+  for (const n of G.nodes.values()) oldRes.set(n.id, n.res);
+  plan = p;
+  buildGraph(p);
+  // A pin follows the item when its recipe changes, so the card stays where it was put.
+  for (const [id, pos] of [...pins]) {
+    if (G.nodes.has(id)) continue;
+    const res = oldRes.get(id);
+    const heir = [...G.nodes.values()].find(n => n.type !== 'surplus' && n.res === res && !pins.has(n.id));
+    pins.delete(id);
+    if (heir) pins.set(heir.id, pos);
+  }
+  renderNodes();
+  layout();
+  renderPositions();
+  renderEdges();
+  renderTotals();
+  if (panel && panel.kind === 'node') {
+    const all = [...G.nodes.values()];
+    const hit = G.nodes.get(panel.id) || all.find(n => n.type !== 'surplus' && n.res === panel.res);
+    if (hit) panel.id = hit.id; else panel = null;
+  }
+  renderPanel();
+  renderMaterials();
+  renderBranches();
+  if (opts.fit) fit();
+  document.querySelectorAll('.node').forEach(el => el.classList.toggle('sel', !!panel && panel.id === el.dataset.id));
+}
+
+/* ---------- Graph model ---------- */
+function buildGraph(p){
+  const nodes = new Map(), goals = new Set();
+  for (const e of p.edges) if (e.to.startsWith('target:')) goals.add(e.from);
+  for (const n of p.nodes) {
+    if (n.type === 'target') continue;
+    const m = {...n, res:nodeRes(n), goal:goals.has(n.id), h:100, x:0, y:0, ins:[], outs:[]};
+    m.rate = n.type === 'recipe' ? outputRate(n, recipes.get(n.recipe), m.res) : n.per_minute;
+    nodes.set(n.id, m);
+  }
+  // A by-product is what the scheme neither uses nor asked for, so only those edges are dashed.
+  const edges = [];
+  for (const e of p.edges) {
+    const src = nodes.get(e.from);
+    if (!src) continue;
+    const toEnd = e.to.startsWith('surplus:');
+    // Every output the scheme does use is listed on the recipe's card.
+    if (!toEnd && src.type === 'recipe' && e.res !== src.res) {
+      src.more = src.more || new Map();
+      src.more.set(e.res, outputRate(src, recipes.get(src.recipe), e.res));
+    }
+    if (!nodes.has(e.to)) continue;
+    const edge = {...e, side:toEnd};
+    edges.push(edge); src.outs.push(edge); nodes.get(e.to).ins.push(edge);
+  }
+  G = {nodes, edges};
+}
+const isEnd = n => n.type === 'surplus';
+
+/* ---------- Layout: layered, left to right ---------- */
+function layout(){
+  const {nodes, edges} = G;
+  if (!nodes.size) return;
+  const core = [...nodes.values()].filter(n => !isEnd(n));
+  // Break cycles walking upstream from the goal, main flows first, so by-product loops become the back edges.
+  const state = new Map();
+  for (const e of edges) e.back = false;
+  const visit = n => {
+    state.set(n.id, 1);
+    const ins = n.ins.slice().sort((a, b) => (a.side - b.side) || (volume(b) - volume(a)));
+    for (const e of ins) {
+      const s = state.get(e.from);
+      if (s === 1) e.back = true;
+      else if (!s) visit(nodes.get(e.from));
+    }
+    state.set(n.id, 2);
+  };
+  core.filter(n => n.goal).forEach(n => state.get(n.id) || visit(n));
+  core.forEach(n => state.get(n.id) || visit(n));
+  // Longest path layers; sources then move right next to their first consumer.
+  const live = e => !e.back && !isEnd(nodes.get(e.to));
+  const layer = new Map(core.map(n => [n.id, 0]));
+  const indeg = new Map(core.map(n => [n.id, n.ins.filter(live).length]));
+  const queue = core.filter(n => !indeg.get(n.id));
+  for (let i = 0; i < queue.length; i++) {
+    for (const e of queue[i].outs.filter(live)) {
+      layer.set(e.to, Math.max(layer.get(e.to), layer.get(e.from) + 1));
+      indeg.set(e.to, indeg.get(e.to) - 1);
+      if (!indeg.get(e.to)) queue.push(nodes.get(e.to));
+    }
+  }
+  for (const n of core) {
+    if (n.ins.some(live)) continue;
+    const outs = n.outs.filter(live).map(e => layer.get(e.to));
+    if (outs.length) layer.set(n.id, Math.min(...outs) - 1);
+  }
+  for (const n of nodes.values()) if (isEnd(n)) layer.set(n.id, Math.max(0, ...n.ins.map(e => layer.get(e.from) + 1)));
+  const minL = Math.min(...layer.values());
+  for (const [k, v] of layer) layer.set(k, v - minL);
+  const count = Math.max(...layer.values()) + 1;
+
+  // Main chain: from the goal back through the longest main-output path.
+  const chain = new Set();
+  let cur = core.find(n => n.goal);
+  while (cur && !chain.has(cur.id)) {
+    chain.add(cur.id);
+    const ins = cur.ins.filter(e => !e.back).sort((a, b) => (layer.get(b.from) - layer.get(a.from)) || (a.side - b.side) || (volume(b) - volume(a)));
+    cur = ins[0] && nodes.get(ins[0].from);
+  }
+
+  // Vertices per column, with dummies carrying long edges.
+  const cols = Array.from({length:count}, () => []);
+  const V = new Map();
+  for (const n of nodes.values()) {
+    const v = {id:n.id, h:n.h, node:n, pos:0, y:0, nb:[]};
+    V.set(n.id, v); cols[layer.get(n.id)].push(v);
+  }
+  const link = (a, b, w) => { a.nb.push([b, w]); b.nb.push([a, w]); };
+  for (const e of edges) {
+    e.via = [];
+    if (e.back) continue;
+    const toSurplus = isEnd(nodes.get(e.to));
+    let prev = V.get(e.from);
+    for (let l = layer.get(e.from) + 1; l < layer.get(e.to); l++) {
+      const d = {id:'d' + e.from + e.to + e.res + l, h:DUMMY_H, dummy:true, pos:0, y:0, nb:[]};
+      cols[l].push(d); e.via.push(d); link(prev, d, 2); prev = d;
+    }
+    if (!toSurplus) link(prev, V.get(e.to), chain.has(e.from) && chain.has(e.to) ? 3 : 1);
+    else V.get(e.to).src = prev;
+  }
+
+  // Ordering: barycentre sweeps, keeping the arrangement with the fewest crossings.
+  const number = c => c.forEach((v, i) => v.pos = i);
+  const surplusLast = c => c.sort((a, b) => (!!(a.node && isEnd(a.node)) - !!(b.node && isEnd(b.node))) || 0);
+  const crossings = () => {
+    let total = 0;
+    for (let l = 0; l + 1 < count; l++) {
+      const pairs = [];
+      for (const a of cols[l]) for (const [b] of a.nb) if (cols[l + 1].includes(b)) pairs.push([a.pos, b.pos]);
+      for (let i = 0; i < pairs.length; i++) for (let j = i + 1; j < pairs.length; j++)
+        if ((pairs[i][0] - pairs[j][0]) * (pairs[i][1] - pairs[j][1]) < 0) total++;
+    }
+    return total;
+  };
+  cols.forEach(number);
+  let best = cols.map(c => c.slice()), bestX = crossings();
+  for (let round = 0; round < 16; round++) {
+    const fwd = round % 2 === 0;
+    for (let i = 0; i < count; i++) {
+      const l = fwd ? i : count - 1 - i, ref = cols[fwd ? l - 1 : l + 1];
+      if (!ref) continue;
+      const bary = new Map(cols[l].map(v => {
+        const src = v.src ? [v.src] : v.nb.filter(([o]) => ref.includes(o)).map(([o]) => o);
+        const list = src.filter(o => ref.includes(o));
+        return [v, list.length ? list.reduce((s, o) => s + o.pos, 0) / list.length : v.pos];
+      }));
+      cols[l].sort((a, b) => bary.get(a) - bary.get(b));
+      surplusLast(cols[l]);
+      number(cols[l]);
+    }
+    const x = crossings();
+    if (x < bestX) { bestX = x; best = cols.map(c => c.slice()); }
+  }
+  best.forEach((c, i) => { cols[i] = c; surplusLast(c); number(c); });
+
+  // Y: neighbours pull, the main chain anchors at zero, each column keeps its order and gaps.
+  const place = (col, want) => {
+    let off = 0;
+    const blocks = [];
+    col.forEach((v, i) => {
+      if (i) off += (col[i - 1].h + v.h) / 2 + (v.node && isEnd(v.node) ? 24 : GAP_Y);
+      let b = {w:want[i][1], z:want[i][0] - off, n:[{v, off}]};
+      while (blocks.length && blocks[blocks.length - 1].z >= b.z) {
+        const a = blocks.pop();
+        b = {w:a.w + b.w, z:(a.z*a.w + b.z*b.w) / (a.w + b.w), n:a.n.concat(b.n)};
+      }
+      blocks.push(b);
+    });
+    for (const b of blocks) for (const {v, off} of b.n) v.y = b.z + off;
+  };
+  cols.forEach(col => { let y = 0; col.forEach(v => { v.y = y; y += v.h + GAP_Y; }); });
+  for (let it = 0; it < 40; it++) {
+    const order = it % 2 ? cols : cols.slice().reverse();
+    for (const col of order) {
+      place(col, col.map(v => {
+        if (v.node && chain.has(v.id)) return [0, 1000];
+        if (v.src) return [v.src.y + v.src.h / 2 + 34 + v.h / 2, 6];
+        if (!v.nb.length) return [v.y, .1];
+        let s = 0, w = 0;
+        for (const [o, k] of v.nb) { s += o.y*k; w += k; }
+        return [s / w, w];
+      }));
+    }
+  }
+
+  // Coordinates: y here is the centre of the vertex.
+  let x = 0;
+  cols.forEach(col => {
+    for (const v of col) {
+      v.x = x;
+      if (v.node) { v.node.x = x; v.node.y = v.y - v.h / 2; }
+    }
+    x += W + GAP_X;
+  });
+  for (const e of edges) e.via = e.via.map(d => ({x:d.x + W / 2, y:d.y}));
+  for (const n of nodes.values()) {
+    const p = pins.get(n.id);
+    if (p) { n.x = p.x; n.y = p.y; }
+  }
+}
+
+/* ---------- Rendering ---------- */
+const PICK = '<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 10.5 7 5M2.8 3.2c2.6-1.6 5-1.2 7 1-.1-3-1.900-4.700-5-4.500"/></svg>';
+const proc = kind => (KIND[kind] || '').toLowerCase();
+// Machines whose time does not follow RPM. A fan's RPM changes only how far its air reaches.
+const NO_RPM = new Set(['spout', 'item_drain', 'furnace', 'blast_furnace', 'smoker', 'hand']);
+function machineRows(n, kind){
+  const rcBtn = `<button class="rc" data-rc="1" aria-label="${esc(t('recipe'))}">&#9662;</button>`;
+  const row = (m, xText, extra, text, btn) => `<div class="mach">${machineIcon(m, 18)}<span class="name">${esc(MACH[m])}<span class="proc">${esc(text)}</span></span><span class="x">×${xText}${extra || ''}</span>${btn || ''}</div>`;
+  const loads = n.loads || [];
+  if (loads.length > 1) {
+    const groups = new Map();
+    for (const l of loads) {
+      const key = l.machine + '|' + l.count;
+      groups.set(key, {m:l.machine, c:l.count, steps:(groups.get(key) || {steps:0}).steps + 1});
+    }
+    return [...groups.values()].map((g, i) => row(g.m, g.c, '', `${proc(kind)}, ${g.steps} ${plural(g.steps, 'stepsCount')}`, i === 0 ? rcBtn : '')).join('');
+  }
+  return loads.map(l => {
+    const batch = l.machine === 'crushing_wheels' || l.machine === 'fan' ? t('batchShort', l.items_per_op) : '';
+    const needs = (l.machine === 'fan' && CATALYST[kind] ? ': ' + CATALYST[kind] : '') + (isStripping(n.recipe) ? t('withAxe') : '');
+    return row(l.machine, l.count, '', proc(kind) + needs + batch, rcBtn);
+  }).join('');
+}
+// RPM, how full the machines are and stress, the same for recipes and generators.
+// One fan works on the whole straight belt in its stream, so this says how long that belt is.
+function beltPerFan(l){
+  if (!l.stream_blocks) return '';
+  const each = Math.ceil(l.stream_blocks / Math.max(l.count, 1));
+  return `<span class="r2" title="${esc(t('fanBeltTitle'))}">${t(l.count > 1 ? 'beltEach' : 'beltOne', each)}</span>`;
+}
+function statsRows(loads, ownRpm, extraRight){
+  const l = loads[0];
+  const speed = NO_RPM.has(l.machine) ? `<span class="muted">${t('noRpm')}</span>`
+    : `<span class="${ownRpm ? 'own' : ''}">${fmt(l.rpm)} RPM${ownRpm ? t('ownRpm') : ''}</span>`;
+  const full = Math.max(...loads.map(x => x.count ? x.exact / x.count : 0));
+  const su = loads.reduce((s, x) => s + x.su, 0);
+  const pct = l.machine === 'hand' ? '' : `<span class="r2 ${full >= .95 ? 'tight' : ''}">${t('load', Math.ceil(full * 100 - 1e-6))}</span>`;
+  return `<div class="stats">${speed}${pct || '<span></span>'}<span>${su ? fmt(su) + ' SU' : `<span class="muted">${t('noSu')}</span>`}</span>${extraRight || beltPerFan(l) || '<span></span>'}</div>`;
+}
+function cardHtml(n){
+  const row = (res, rate) => `<div class="head">${itemIcon(res, 24)}<div><div class="t" title="${esc(nameOf(res))}">${esc(nameOf(res))}</div><div class="r">${rateText(res, rate)}</div></div></div>`;
+  const head = row(n.res, n.rate);
+  // The machine comes first and its products under it, so nothing above reads as an input.
+  const output = rows => `<div class="outs"><div class="lbl">${t('output')}</div>${rows}</div>`;
+  if (n.type === 'recipe') {
+    const kind = recipes.get(n.recipe).kind;
+    const burn = S.heat && n.burners ? `<span class="r2 heat">${t(n.heat === 'superheated' ? 'superheated' : 'heated')} ×${n.burners}</span>` : '';
+    const more = [...(n.more || [])].map(([res, rate]) => row(res, rate)).join('');
+    return machineRows(n, kind) + statsRows(n.loads, !!(S.overrides[n.recipe] && S.overrides[n.recipe].rpm), burn) + output(head + more);
+  }
+  if (n.type === 'surplus') return head + `<div class="sub">${t('byProductCard')}</div>`;
+  if (n.type === 'stock') return head + `<div class="sub green">${t('fromStock')}</div>`;
+  const base = `<div class="sub green">${PICK}${t('baseResource')}</div>`;
+  if (n.load) return `<div class="mach">${machineIcon(n.load.machine, 18)}<span class="name">${esc(MACH[n.load.machine])}</span><span class="x">×${n.load.count}</span></div>${statsRows([n.load], false)}` + output(head) + base;
+  return head + base;
+}
+function renderNodes(){
+  const box = $('nodes');
+  box.innerHTML = [...G.nodes.values()].map(n => `<div class="node${n.goal ? ' goal' : ''}${n.type === 'surplus' ? ' by' : ''}" data-id="${esc(n.id)}">${cardHtml(n)}</div>`).join('');
+  box.querySelectorAll('.node').forEach(el => { const n = G.nodes.get(el.dataset.id); n.el = el; n.h = el.offsetHeight; });
+}
+function renderPositions(){
+  for (const n of G.nodes.values()) { n.el.style.left = n.x + 'px'; n.el.style.top = n.y + 'px'; }
+}
+function bez(p0, c1, c2, p3, t){
+  const u = 1 - t;
+  return [u*u*u*p0[0] + 3*u*u*t*c1[0] + 3*u*t*t*c2[0] + t*t*t*p3[0], u*u*u*p0[1] + 3*u*u*t*c1[1] + 3*u*t*t*c2[1] + t*t*t*p3[1]];
+}
+function segments(points, shift){
+  const out = [];
+  for (let i = 0; i + 1 < points.length; i++) {
+    const a = points[i], b = points[i + 1];
+    const dx = b[0] > a[0] ? Math.max(36, (b[0] - a[0]) * .5) : 70;
+    out.push([a, [a[0] + dx, a[1] + shift], [b[0] - dx, b[1] + shift], b]);
+  }
+  return out;
+}
+function polyline(segs){
+  const pts = [];
+  for (const s of segs) for (let i = 0; i <= 16; i++) pts.push(bez(s[0], s[1], s[2], s[3], i / 16));
+  return pts;
+}
+const insideCard = (p, n, m) => p[0] > n.x - m && p[0] < n.x + W + m && p[1] > n.y - m && p[1] < n.y + n.h + m;
+function renderEdges(){
+  const nodes = [...G.nodes.values()], paths = [], arrows = [], labels = [], placed = [];
+  const parallel = new Map();
+  const list = G.edges.slice().sort((a, b) => (b.side - a.side) || (volume(a) - volume(b)));
+  for (const e of list) {
+    const key = e.from + '>' + e.to, idx = parallel.get(key) || 0;
+    parallel.set(key, idx + 1);
+    const a = G.nodes.get(e.from), b = G.nodes.get(e.to);
+    const start = [a.x + W, a.y + a.h / 2], tip = [b.x, b.y + b.h / 2];
+    const heft = Math.log10(volume(e) + 1);
+    const len = e.side ? 11 : Math.min(21, 13 + heft * 2.4);
+    const end = [tip[0] - len * .7, tip[1]];
+    const shift = idx ? (idx % 2 ? 1 : -1) * Math.ceil(idx / 2) * 26 : 0;
+    let segs = segments([start, end], shift);
+    let pts = polyline(segs);
+    const others = nodes.filter(n => n !== a && n !== b);
+    if (e.via.length && pts.some(p => others.some(n => insideCard(p, n, 6)))) {
+      segs = segments([start, ...e.via.map(v => [v.x, v.y]), end], shift);
+      pts = polyline(segs);
+    }
+    const color = tint(iconColor(e.res));
+    const width = e.side ? 1.4 : Math.min(3, 1.5 + heft * .55);
+    const d = `M${segs[0][0][0]} ${segs[0][0][1]}` + segs.map(s => `C${s[1][0]} ${s[1][1]} ${s[2][0]} ${s[2][1]} ${s[3][0]} ${s[3][1]}`).join('');
+    paths.push(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${width.toFixed(2)}"${e.side ? ' stroke-dasharray="5 4"' : ''}/>`);
+    const hw = len * .56;
+    arrows.push(`<polygon points="${tip[0]},${tip[1]} ${tip[0] - len},${tip[1] - hw} ${tip[0] - len},${tip[1] + hw}" fill="${color}"/>`);
+    // The label takes the first free spot around the middle of the curve.
+    let spot = pts[Math.floor(pts.length / 2)];
+    for (const t of [.5, .42, .58, .34, .66, .26, .74, .18, .82]) {
+      const p = pts[Math.floor(pts.length * t)];
+      const clear = !nodes.some(n => insideCard([p[0], p[1] + 8], n, 26)) && !placed.some(q => Math.abs(q[0] - p[0]) < 62 && Math.abs(q[1] - p[1]) < 36);
+      if (clear) { spot = p; break; }
+    }
+    placed.push(spot);
+    const txt = fmt(e.per_minute) + (unit(e.res) ? ' ' + unit(e.res) : '') + (e.side ? t('byProductEdge') : '');
+    const tr = e.transport;
+    const extra = tr ? [tr.stack > 1 ? t('perStack', tr.stack) : '', tr.belts > 1 ? t('beltsN', tr.belts) : '', S.belt ? fmt(tr.belt_rpm) + ' RPM' : ''].filter(Boolean).join(', ') : '';
+    labels.push(`<div class="elabel" data-edge="${esc(edgeKey(e))}" style="left:${spot[0]}px;top:${spot[1]}px" title="${esc(nameOf(e.res))}">${itemIcon(e.res, 17)}<span class="n">${txt}</span>${extra ? `<span class="n t${tr.needs_buffer ? ' warn' : ''}">${extra}</span>` : ''}</div>`);
+  }
+  $('edges').innerHTML = paths.join('') + arrows.join('');
+  $('labels').innerHTML = labels.join('');
+}
+function applyView(){
+  $('world').style.transform = `translate(${view.x}px,${view.y}px) scale(${view.k})`;
+  // Far out, details are unreadable anyway: keep what identifies a card and make it bigger.
+  $('world').classList.toggle('far', view.k < .4);
+  $('zPct').textContent = Math.round(view.k * 100) + '%';
+}
+function fit(){
+  const ns = [...G.nodes.values()];
+  if (!ns.length) return;
+  const x0 = Math.min(...ns.map(n => n.x)), x1 = Math.max(...ns.map(n => n.x + W));
+  const y0 = Math.min(...ns.map(n => n.y)), y1 = Math.max(...ns.map(n => n.y + n.h));
+  // The floating sidebar covers the left edge, so the graph is fitted beside it.
+  const left = $('side').offsetWidth + 24, top = 44, areaW = innerWidth - left - (panel ? 340 : 0), areaH = innerHeight - top;
+  const pad = 36;
+  const k = Math.max(.12, Math.min(1, (areaW - pad*2) / (x1 - x0), (areaH - pad*2) / (y1 - y0)));
+  view = {k, x:left + (areaW - (x1 - x0)*k) / 2 - x0*k, y:top + (areaH - (y1 - y0)*k) / 2 - y0*k};
+  applyView();
+}
+function zoomAt(cx, cy, factor){
+  const k = Math.max(.12, Math.min(2.5, view.k * factor));
+  view.x = cx - (cx - view.x) * k / view.k;
+  view.y = cy - (cy - view.y) * k / view.k;
+  view.k = k;
+  applyView();
+}
+
+/* ---------- Totals and panel ---------- */
+function renderTotals(){
+  if (!plan) return;
+  const n = Object.values(plan.machines).reduce((s, v) => s + v, 0);
+  let txt = `${fmt(plan.total_su)} SU · ${fmt(n)} ${plural(n, 'machinesCount')}`;
+  if (plan.heat) { const b = plan.heat.burners_heated + plan.heat.burners_superheated; txt += ' · ' + t('burnersTotal', b); }
+  const warn = plan.warnings.length + plan.manual.length;
+  $('totals').innerHTML = esc(txt) + (warn ? `<span class="w">!</span>` : '');
+  $('totals').classList.toggle('on', !!panel && panel.kind === 'load');
+}
+function warnText(w){
+  return w.replace(/^(.+): not a usual resource and no way to craft it was found$/, (_, id) => t('warnUnusual', nameOf(id)))
+          .replace(/^(.+): fan stream is too short for any belt speed$/, (_, id) => t('warnFan', id));
+}
+function loadPanel(){
+  const by = new Map();
+  for (const n of plan.nodes) for (const l of n.loads || (n.load ? [n.load] : [])) {
+    const e = by.get(l.machine) || {c:0, su:0};
+    e.c += l.count; e.su += l.su; by.set(l.machine, e);
+  }
+  const rows = [...by].sort((a, b) => b[1].su - a[1].su).map(([m, e]) => `<div class="row">${machineIcon(m, 18)}<span>${esc(MACH[m] || m)}</span><span class="d">×${fmt(e.c)}</span><span class="v p">${fmt(e.su)} SU</span></div>`).join('');
+  let h = `<div class="ph"><h2>${t('stressBuildings')}</h2></div><div class="row"><span>${t('total')}</span><span class="v p">${fmt(plan.total_su)} SU</span></div><h3>${t('suByMachine')}</h3>${rows || `<div class="note">${t('noMachines')}</div>`}`;
+  if (power) {
+    h += `<h3>${t('powerTitle')}</h3>` + power.sources.map(s => `<div class="row"><span>${esc(s.id === 'windmill_bearing' ? t('windmillN', S.sails) : SOURCES[s.id] || readable(s.id))}</span><span class="d">${fmt(s.su_each)} SU</span><span class="v p">×${fmt(s.count)}</span></div>`).join('');
+    const b = power.boilers;
+    h += `<div class="note">${t('boiler', b.levels, b.engines, b.tank_blocks, b.water_mb_per_tick, b.burners_kindled, b.burners_seething)}</div>`;
+  }
+  if (plan.heat) {
+    const u = plan.heat;
+    h += `<h3>${t('heatTitle')}</h3><div class="row"><span>${t('burnersHeated')}</span><span class="v p">${u.burners_heated}</span></div><div class="row"><span>${t('burnersSuper')}</span><span class="v p">${u.burners_superheated}</span></div><div class="row"><span>${t('coal')}</span><span class="v p">${fmt(u.coal_per_min)}${t('perMin')}</span></div><div class="row"><span>${t('cake')}</span><span class="v p">${fmt(u.cake_per_min)}${t('perMin')}</span></div>`;
+  }
+  if (S.mode === 'full_auto') {
+    h += `<h3>${t('manualTitle')}</h3>` + (plan.manual.length ? plan.manual.map(id => `<div class="row">${itemIcon(id, 18)}<span>${esc(nameOf(id))}</span></div>`).join('') : `<div class="note">${t('notNeeded')}</div>`);
+  }
+  if (plan.warnings.length) h += `<h3>${t('warnings')}</h3>` + plan.warnings.map(w => `<div class="warn">${esc(warnText(w))}</div>`).join('');
+  return h;
+}
+function flowRows(list, side){
+  return list.map(e => {
+    const other = side === 'in' ? G.nodes.get(e.from) : G.nodes.get(e.to);
+    const note = e.side ? t('byProductShort') : '';
+    const open = side === 'out' ? ` go" data-item="${esc(e.res)}` : '';
+    return `<div class="row${open}">${itemIcon(e.res, 18)}<span>${esc(nameOf(e.res))}</span>${note ? `<span class="d">${note}</span>` : ''}<span class="v" title="${esc(nameOf(other.res))}">${rateText(e.res, e.per_minute)}</span></div>`;
+  }).join('');
+}
+function recipeLabel(id){
+  const r = recipes.get(id);
+  if (!r) return readable(id);
+  const inputs = r.inputs.map(s => nameOf(s.res)).join(' + ');
+  return `${KIND[r.kind] || r.kind}: ${inputs || id}`;
+}
+function nodePanel(n){
+  let h = `<div class="ph">${itemIcon(n.res, 28)}<div><h2>${esc(nameOf(n.res))}</h2><div style="color:var(--blue)">${rateText(n.res, n.rate)}</div></div></div>`;
+  const ins = n.ins, outs = n.outs;
+  h += `<div class="btns"><button class="btn" id="pJei">${t('itemRecipes')}</button></div>`;
+  if (n.type === 'recipe') {
+    const over = S.overrides[n.recipe] || {};
+    const opts = [n.recipe, ...n.alternatives];
+    h += `<h3>${t('recipe')}</h3><select id="pRecipe">${opts.map(o => `<option value="${esc(o)}"${o === n.recipe ? ' selected' : ''}>${esc(recipeLabel(o))}</option>`).join('')}</select>`;
+    if (n.machine_options.length) h += `<h3>${t('machine')}</h3><select id="pMachine">${n.machine_options.map(m => `<option value="${m}"${m === n.loads[0].machine ? ' selected' : ''}>${esc(machineName(m, recipes.get(n.recipe).kind))}</option>`).join('')}</select>`;
+    h += `<h3>${t('ownRpmTitle')}</h3><input id="pRpm" class="inp" type="number" min="1" step="any" placeholder="${t('commonRpm', fmt(S.rpm))}" value="${over.rpm ?? ''}">`;
+    const l = n.loads[0];
+    if (l.ticks) {
+      const perUnit = l.items_per_op * 1200 / l.ticks;
+      h += `<h3>${t('speed')}</h3><div class="row"><span>${NO_RPM.has(l.machine) ? t('noRpmCap') : 'RPM'}</span><span class="v">${NO_RPM.has(l.machine) ? '' : fmt(l.rpm)}</span></div>`;
+      h += `<div class="row"><span>${t('cycle')}</span><span class="v">${t('ticksN', fmt(l.ticks))}</span></div>`;
+      h += `<div class="row"><span>${t(l.machine === 'fan' ? 'perStreamBlock' : 'perMachine')}</span><span class="v p">${fmt(perUnit)}${t('perMin')}</span></div>`;
+      if (l.machine === 'fan') h += `<div class="note">${t('fanRpmNote')}</div>`;
+    }
+    if (isStripping(n.recipe)) h += `<div class="note">${t('stripNote')}</div>`;
+    if (n.loads.length === 1 && (l.machine === 'crushing_wheels' || l.machine === 'fan')) {
+      const cur = over.batch || 1;
+      h += `<h3>${t('batchTitle')}</h3><div class="seg" id="pBatch">${[1, 4, 16, 64].map(b => `<button data-v="${b}"${b === cur ? ' class="on"' : ''}>${b}</button>`).join('')}</div>`;
+    }
+    if (n.loads.length > 1) h += `<h3>${t('stepsTitle')}</h3>` + n.loads.map((s, i) => `<div class="row">${machineIcon(s.machine, 18)}<span>${i + 1}. ${esc(MACH[s.machine])}</span><span class="d">${fmt(s.su)} SU</span><span class="v p">×${s.count}</span></div>`).join('');
+    if (l.stream_blocks) {
+      const each = Math.ceil(l.stream_blocks / Math.max(l.count, 1)), reach = l.stream_blocks / l.exact;
+      h += `<h3>${t('fanTitle')}</h3><div class="row"><span>${t('beltPerFan')}</span><span class="v p">${t('blocksN', each)}</span></div>`;
+      h += `<div class="row"><span>${t('reach')}</span><span class="v p">${t('upToBlocks', fmt(reach))}</span></div>`;
+      h += `<div class="row"><span>${t('maxBeltRpm')}</span><span class="v p">${fmt(l.max_belt_rpm)}</span></div>`;
+      h += `<div class="note">${t('fanNote')}</div>`;
+    }
+    h += `<h3>${t('inputs')}</h3>${flowRows(ins, 'in') || `<div class="note">${t('none')}</div>`}`;
+    h += `<h3>${t('outputs')}</h3>${flowRows(outs, 'out') || `<div class="note">${t('onlyTarget')}</div>`}`;
+    h += `<div class="btns"><button class="btn" id="pStock">${t('toStock')}</button><button class="btn" id="pReset">${t('reset')}</button></div>`;
+  } else if (n.type === 'surplus') {
+    h += `<h3>${t('whereFrom')}</h3>${flowRows(ins, 'in')}`;
+  } else {
+    const inStock = n.type === 'stock', item = items.get(n.res);
+    const can = !!(item && item.has_recipe);
+    h += `<h3>${t('whereTo')}</h3>${flowRows(outs, 'out') || `<div class="note">${t('onlyTarget')}</div>`}`;
+    if (n.load) h += `<h3>${t('generator')}</h3><div class="row">${machineIcon(n.load.machine, 18)}<span>${esc(MACH[n.load.machine])}</span><span class="d">${fmt(n.load.su)} SU</span><span class="v p">×${n.load.count}</span></div>`;
+    h += `<div class="btns">`;
+    if (inStock) h += `<button class="btn" id="pUnstock">${t('unstock')}</button>`;
+    else h += `<button class="btn" id="pStock">${t('toStock')}</button>`;
+    h += `<button class="btn" id="pCraft"${can && !inStock ? '' : ' disabled'}>${t('craft')}</button></div><div class="note" id="pNote">${can ? '' : t('noRecipeItem')}</div>`;
+  }
+  return h;
+}
+function renderPanel(){
+  const el = $('panel');
+  el.classList.toggle('open', !!panel);
+  renderTotals();
+  document.querySelectorAll('.node').forEach(c => c.classList.toggle('sel', !!panel && panel.id === c.dataset.id));
+  if (!panel || !plan) return;
+  if (panel.kind === 'item') { renderItemPanel(); return; }
+  if (panel.kind === 'edge') {
+    const e = G.edges.find(x => edgeKey(x) === panel.key);
+    if (!e) { panel = null; el.classList.remove('open'); return; }
+    $('panelBody').innerHTML = edgePanel(e);
+    bindEdgePanel(e);
+    return;
+  }
+  const n = panel.kind === 'node' ? G.nodes.get(panel.id) : null;
+  if (panel.kind === 'node' && !n) { panel = null; el.classList.remove('open'); return; }
+  $('panelBody').innerHTML = n ? nodePanel(n) : loadPanel();
+  if (!n) return;
+  panel.res = n.res;
+  bindNodePanel(n);
+  if (n.type === 'recipe') {
+    // Alternatives are labelled once their recipes arrive.
+    const missing = n.alternatives.filter(a => !recipes.has(a));
+    if (missing.length) Promise.all(missing.map(loadRecipe)).then(() => { if (panel && panel.id === n.id) renderPanel(); }).catch(() => {});
+  }
+}
+function setOverride(recipe, key, value){
+  const o = S.overrides[recipe] = S.overrides[recipe] || {};
+  if (value === null) delete o[key]; else o[key] = value;
+  if (!Object.keys(o).length) delete S.overrides[recipe];
+  replan();
+}
+function bindNodePanel(n){
+  const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
+  document.querySelectorAll('#panelBody [data-item]').forEach(row => row.addEventListener('click', () => openItem(row.dataset.item, 'uses')));
+  on('pJei', 'click', () => openItem(n.res, n.type === 'surplus' ? 'uses' : 'made'));
+  on('pRecipe', 'change', e => { const v = e.target.value; confirmChange(() => { S.choice[n.res] = v; }); });
+  on('pMachine', 'change', e => setOverride(n.recipe, 'machine', e.target.value));
+  on('pRpm', 'change', e => { const v = parseFloat(e.target.value); setOverride(n.recipe, 'rpm', v > 0 ? v : null); });
+  on('pBatch', 'click', e => { const v = +e.target.dataset.v; if (v) setOverride(n.recipe, 'batch', v === 1 ? null : v); });
+  on('pStock', 'click', () => { if (!S.stock.includes(n.res)) S.stock.push(n.res); replan(); });
+  on('pUnstock', 'click', () => { S.stock = S.stock.filter(r => r !== n.res); replan(); });
+  on('pReset', 'click', () => { delete S.choice[n.res]; delete S.overrides[n.recipe]; replan(); });
+  on('pCraft', 'click', async () => {
+    try {
+      const list = await api('/api/producers?item=' + encodeURIComponent(n.res));
+      if (!list.length) { $('pNote').textContent = t('noRecipeFound'); return; }
+      list.forEach(r => recipes.set(r.id, r));
+      $('pNote').innerHTML = `<h3>${t('recipe')}</h3><select id="pCraftList"><option value="">${t('pickRecipe')}</option>${list.map(r => `<option value="${esc(r.id)}">${esc(recipeLabel(r.id))}</option>`).join('')}</select>`;
+      $('pCraftList').addEventListener('change', e => {
+        const v = e.target.value;
+        if (!v) return;
+        confirmChange(() => { S.choice[n.res] = v; S.stock = S.stock.filter(r => r !== n.res); });
+      });
+    } catch (e) { $('pNote').textContent = e.http ? e.message : t('noServer'); }
+  });
+}
+function openNode(id, focusRecipe){
+  const n = G.nodes.get(id);
+  if (!n) return;
+  // A leftover is mostly a question of what it could become.
+  if (n.type === 'surplus') { openItem(n.res, 'uses'); return; }
+  panel = {kind:'node', id, res:n.res};
+  renderPanel();
+  const r = n.el.getBoundingClientRect(), limit = innerWidth - 340 - 16;
+  if (r.right > limit) { view.x -= r.right - limit; applyView(); }
+  if (focusRecipe && $('pRecipe')) $('pRecipe').focus();
+}
+function closePanel(){ panel = null; renderPanel(); }
+
+/* ---------- Recipe browser, like JEI ---------- */
+const recipeLists = new Map();
+async function recipeList(kind, item){
+  const key = kind + '|' + item;
+  if (!recipeLists.has(key)) {
+    const list = await api(`/api/${kind}?item=${encodeURIComponent(item)}`);
+    list.forEach(r => recipes.set(r.id, r));
+    recipeLists.set(key, list);
+  }
+  return recipeLists.get(key);
+}
+function openItem(res, tab){ panel = {kind:'item', res, tab}; $('panel').scrollTop = 0; renderPanel(); }
+const leftover = res => plan.nodes.filter(n => n.type === 'surplus' && n.res === res).reduce((s, n) => s + n.per_minute, 0);
+// A tag opens the item that stands for it. A tag of really different items stays a label.
+function chip(res, amount){
+  const id = real(res);
+  const clickable = !id.startsWith('#');
+  const title = clickable ? nameOf(id) : res;
+  return `<span class="chip${clickable ? ' go' : ''}"${clickable ? ` data-res="${esc(id)}"` : ''} title="${esc(title)}">${itemIcon(id, 18)}<span>${fmt(amount)}</span></span>`;
+}
+// How a recipe is done, including what a fan needs in its stream.
+const method = kind => (KIND[kind] || kind) + (CATALYST[kind] ? t('fanWith', CATALYST[kind]) : '');
+function recipeRow(r, tab, res){
+  const outs = r.outputs.map(o => chip(o.res, o.amount * o.chance)).join('');
+  const ins = r.inputs.map(s => chip(s.res, s.amount)).join('');
+  const search = (r.id + ' ' + r.inputs.concat(r.outputs).map(x => nameOf(x.res)).join(' ')).toLowerCase();
+  const mine = plan.nodes.some(n => n.recipe === r.id);
+  let act = '';
+  if (tab === 'made') act = mine ? `<span class="d">${t('inScheme')}</span>` : `<button class="btn sm" data-use="${esc(r.id)}">${t('use')}</button>`;
+  else act = (mine ? `<span class="d">${t('inScheme')}</span> ` : '') + `<button class="btn sm" data-add="${esc(r.id)}">${t('addToScheme')}</button>`;
+  const others = r.outputs.length > 1 ? ` <span class="d">+${r.outputs.length - 1}</span>` : '';
+  return `<div class="rcp" data-search="${esc(search)}"><div class="rl"><span class="rt"><span class="rn">${esc(nameOf(mainRes(r)))}</span>${others}<span class="d rk">${esc(method(r.kind) + (isStripping(r.id) ? t('withAxe') : ''))}</span></span>${act}</div><div class="rf">${ins}<span class="ar">&rarr;</span>${outs}</div></div>`;
+}
+async function renderItemPanel(){
+  const p = panel, body = $('panelBody');
+  const tab = name => `<button data-tab="${name}"${p.tab === name ? ' class="on"' : ''}>${t(name === 'made' ? 'madeFrom' : 'usedFor')}</button>`;
+  body.innerHTML = `<div class="ph">${itemIcon(p.res, 28)}<div><h2>${esc(nameOf(p.res))}</h2></div></div>
+    <input id="iItem" class="inp wide" placeholder="${t('otherItem')}" autocomplete="off" spellcheck="false">
+    <div class="seg wide" id="iTabs">${tab('made')}${tab('uses')}</div>
+    <input id="iFilter" class="inp wide" placeholder="${t('searchRecipes')}" autocomplete="off" spellcheck="false">
+    <div id="iList"><div class="note">${t('loading')}</div></div>`;
+  $('iTabs').addEventListener('click', e => { const v = e.target.dataset.tab; if (v) { panel.tab = v; renderItemPanel(); } });
+  bindItemSearch($('iItem'), it => { hideDrop(); openItem(it.id, panel.tab); }, it => it.id.split(':')[0]);
+  $('iFilter').addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('#iList .rcp').forEach(el => { el.hidden = !!q && !el.dataset.search.includes(q); });
+  });
+  let list;
+  try { list = await recipeList(p.tab === 'made' ? 'producers' : 'consumers', p.res); }
+  catch (e) { if (panel === p) $('iList').innerHTML = `<div class="note">${e.http ? esc(e.message) : t('needServer')}</div>`; return; }
+  if (panel !== p) return;
+  const empty = t(p.tab === 'made' ? 'rawNoRecipe' : 'notUsed');
+  const left = leftover(p.res);
+  const head = left > 1e-6 ? `<div class="note warn">${t('leftoverNote', fmt(left))}</div>` : '';
+  $('iList').innerHTML = head + (list.map(r => recipeRow(r, p.tab, p.res)).join('') || `<div class="note">${empty}</div>`);
+  $('iList').addEventListener('click', e => {
+    const go = e.target.closest('[data-res]');
+    if (go) { openItem(go.dataset.res, panel.tab); return; }
+    const use = e.target.closest('[data-use]');
+    if (use) { confirmChange(() => { S.choice[p.res] = use.dataset.use; S.stock = S.stock.filter(r => r !== p.res); }); return; }
+    const add = e.target.closest('[data-add]');
+    if (add) askBranch(add.dataset.add, p.res);
+  });
+}
+// Picks how much of a recipe to hang off the scheme. The window shows what it would cost as you type.
+function askBranch(recipe, input){
+  const r = recipes.get(recipe), main = mainRes(r), left = leftover(input);
+  const amountUnit = isFluid(main) ? t('mb') : t('pieces');
+  // With leftovers around, taking all of them is what the click most likely means.
+  let useAll = left > 1e-6, seq = 0, timer;
+  $('askBox').innerHTML = `<h2>${esc(nameOf(main))}</h2><div class="note">${esc(method(r.kind))}${esc(t('fromInput', nameOf(input)))}</div>
+    <h3>${t('howMany')}</h3>
+    <div class="qty"><input id="dPer" class="inp" type="number" min="0.01" step="any" placeholder="${t('perMinutePh', amountUnit)}" aria-label="${t('perMinuteAria')}"><button class="btn" id="dAll"${left > 1e-6 ? '' : ' disabled'}>${t('allLeft')}${left > 1e-6 ? ' (' + fmt(left) + ' ' + esc(nameOf(input)) + ')' : ''}</button></div>
+    <div id="dPreview"></div>
+    <div class="btns"><button class="btn" id="askNo">${t('cancel')}</button><button class="btn yes" id="askYes" disabled>${t('add')}</button></div>`;
+  $('ask').hidden = false;
+  const close = () => { clearTimeout(timer); seq++; $('ask').hidden = true; removeEventListener('keydown', key); };
+  const key = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  addEventListener('keydown', key);
+  const rate = () => { const v = parseFloat($('dPer').value); return v > 0 ? v : null; };
+  const valid = () => useAll || rate() !== null;
+  const branch = () => ({recipe, input, per_minute:useAll ? null : rate()});
+  const refresh = async () => {
+    const yes = $('askYes');
+    yes.disabled = !valid();
+    $('dAll').classList.toggle('on', useAll);
+    const my = ++seq;
+    if (!valid() || !S.ask) { $('dPreview').innerHTML = ''; return; }
+    try {
+      const p = await api('/api/plan', {...request(), branches:[...S.branches, branch()]});
+      if (my !== seq) return;
+      const done = p.branches[p.branches.length - 1];
+      const made = done ? `<div class="row"><span>${t('willMake')}</span><span class="v">${rateText(main, done.per_minute)}</span></div>` : '';
+      $('dPreview').innerHTML = made + diffHtml(planDiff(plan, p));
+    } catch (e) {
+      if (my !== seq) return;
+      yes.disabled = true;
+      $('dPreview').innerHTML = `<div class="note warn">${e.http ? esc(e.message) : t('noServer')}</div>`;
+    }
+  };
+  $('dPer').addEventListener('input', () => { useAll = false; clearTimeout(timer); timer = setTimeout(refresh, 200); $('askYes').disabled = !valid(); $('dAll').classList.remove('on'); });
+  $('dPer').addEventListener('keydown', e => { if (e.key === 'Enter' && !$('askYes').disabled) $('askYes').click(); });
+  $('dAll').addEventListener('click', () => { useAll = true; $('dPer').value = ''; refresh(); });
+  $('askNo').onclick = close;
+  $('askYes').onclick = () => { const b = branch(); close(); S.branches = [...S.branches, b]; replan(); };
+  refresh();
+  $('dPer').focus();
+}
+// What a change would do to the raw resources and the stress, compared with the current plan.
+function planDiff(before, after){
+  const sources = p => {
+    const map = new Map();
+    for (const n of p.nodes) if (n.type === 'gather' || n.type === 'generate') map.set(n.res, n.per_minute);
+    return map;
+  };
+  const was = sources(before), now = sources(after);
+  const added = [...now].filter(([r]) => !was.has(r));
+  const changed = [...now].filter(([r, v]) => was.has(r) && Math.abs(v - was.get(r)) > 1e-6).map(([r, v]) => [r, was.get(r), v]);
+  const gone = [...was].filter(([r]) => !now.has(r));
+  return {added, changed, gone, suBefore:before.total_su, suAfter:after.total_su, any:added.length + changed.length + gone.length > 0 || Math.abs(before.total_su - after.total_su) > 1e-6};
+}
+function diffHtml(d){
+  const rows = list => list.map(([r, v]) => `<div class="row">${itemIcon(r, 18)}<span>${esc(nameOf(r))}</span><span class="v">${rateText(r, v)}</span></div>`).join('');
+  let h = '';
+  if (d.added.length) h += `<h3>${t('newResources')}</h3>${rows(d.added)}`;
+  if (d.changed.length) h += `<h3>${t('willChange')}</h3>` + d.changed.map(([r, a, b]) => `<div class="row">${itemIcon(r, 18)}<span>${esc(nameOf(r))}</span><span class="d">${rateText(r, a)}</span><span class="v">${rateText(r, b)}</span></div>`).join('');
+  if (d.gone.length) h += `<h3>${t('noLongerNeeded')}</h3>${rows(d.gone)}`;
+  return h + `<h3>${t('stressTitle')}</h3><div class="row"><span>${fmt(d.suBefore)} SU</span><span class="v p">${fmt(d.suAfter)} SU</span></div>`;
+}
+function askConfirm(d){
+  let h = `<h2>${t('recalculated')}</h2>` + diffHtml(d);
+  h += `<div class="btns"><button class="btn" id="askNo">${t('cancel')}</button><button class="btn yes" id="askYes">${t('yes')}</button></div>`;
+  $('askBox').innerHTML = h;
+  $('ask').hidden = false;
+  return new Promise(done => {
+    const finish = v => { $('ask').hidden = true; removeEventListener('keydown', key); done(v); };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); finish(false); } };
+    addEventListener('keydown', key);
+    $('askYes').onclick = () => finish(true);
+    $('askNo').onclick = () => finish(false);
+    $('askYes').focus();
+  });
+}
+function renderAbout(){
+  const link = (url, key) => `<a href="${url}" target="_blank" rel="noopener">${t(key)}</a>`;
+  $('askBox').innerHTML = `<h2>${t('about')}</h2><p>${t('aboutIntro')}</p>
+    <h3>${t('aboutPictures')}</h3><p>${t('aboutPicturesText')}</p>
+    <div class="links">${link('https://www.minecraft.net/en-us/eula', 'linkEula')}${link('https://github.com/Creators-of-Create/Create/blob/mc1.21.1-6.0.10/LICENSE.md', 'linkLicense')}${link('https://github.com/MekoNix/CreateCalculated', 'linkSource')}</div>
+    <div class="btns"><button class="btn" id="aboutClose">${t('close')}</button></div>`;
+  $('aboutClose').onclick = closeAbout;
+}
+function closeAbout(){ $('ask').hidden = true; removeEventListener('keydown', aboutKey, true); $('aboutBtn').focus(); }
+// If another window has taken the dialog over, Escape is its business.
+function aboutKey(e){ if (e.key === 'Escape' && $('aboutClose')) { e.stopPropagation(); closeAbout(); } }
+function openAbout(){
+  // The keyboard can reach this button past a window that is already open.
+  if (!$('ask').hidden) return;
+  renderAbout();
+  $('ask').hidden = false;
+  // Caught on the way down, or the same Escape would also close the side panel.
+  addEventListener('keydown', aboutKey, true);
+  $('aboutClose').focus();
+}
+// Applies a change to the scheme, asking first when it would alter the resources.
+async function confirmChange(apply){
+  const saved = {branches:[...S.branches], choice:{...S.choice}, stock:[...S.stock]};
+  // The recipe browser keeps what was typed, other panels redraw to undo a changed selection.
+  const undo = () => { Object.assign(S, saved); if (!panel || panel.kind !== 'item') renderPanel(); };
+  apply();
+  if (!S.ask) return replan();
+  let preview;
+  try { preview = await api('/api/plan', request()); }
+  catch (e) { undo(); setStatus(e.http ? e.message : t('noServer'), true); return; }
+  const diff = planDiff(plan, preview);
+  if (!diff.any || await askConfirm(diff)) replan(); else undo();
+}
+function renderBranches(){
+  const box = $('sBr');
+  box.hidden = !S.branches.length;
+  if (!S.branches.length) return;
+  const done = (plan && plan.branches) || [];
+  $('brBody').innerHTML = S.branches.map((b, i) => {
+    const r = recipes.get(b.recipe), hit = done.find(d => d.recipe === b.recipe), item = hit ? hit.item : mainRes(r);
+    const rate = hit ? fmt(hit.per_minute) + t('perMin') : t('noLeftover');
+    return `<div class="row">${itemIcon(item, 18)}<span>${esc(nameOf(item))}</span><span class="d">${b.per_minute ? '' : t('allLeftShort')}</span><span class="v">${rate}</span><button class="rc x" data-i="${i}" aria-label="${t('remove')}">&times;</button></div>`;
+  }).join('');
+}
+
+const buildRow = (id, count) => `<div class="row">${itemIcon(id, 18)}<span>${esc(nameOf(id))}</span><span class="v p">${fmt(count)}</span></div>`;
+let matSeq = 0, matList = [];
+// One minute of a plan at these rates is the whole list; it stops at ingots rather than ore.
+async function renderMaterials(){
+  const list = (plan && plan.build) || [], my = ++matSeq;
+  $('sMat').hidden = !list.length;
+  $('bNote').textContent = '';
+  matList = [];
+  if (!list.length) return;
+  $('matBuild').innerHTML = list.map(b => buildRow(b.item, b.count)).join('');
+  if (!$('sMat').open) return;
+  try {
+    const p = await api('/api/plan', {targets:list.map(b => ({item:b.item, per_minute:b.count})), rpm:S.rpm, stop_at_materials:true, ...(S.config ? {config:S.config} : {})});
+    if (my !== matSeq) return;
+    matList = p.nodes.filter(n => n.type === 'gather').sort((x, y) => (x.origin !== 'material') - (y.origin !== 'material') || y.per_minute - x.per_minute).map(n => ({item:n.res, count:Math.ceil(n.per_minute)}));
+    $('matRaw').innerHTML = matList.map(x => buildRow(x.item, x.count)).join('') || `<div class="note">${t('none')}</div>`;
+  } catch (e) { if (my === matSeq) $('matRaw').innerHTML = `<div class="note">${e.http ? esc(e.message) : t('needServer')}</div>`; }
+}
+function materialsText(){
+  const lines = l => l.map(b => `${nameOf(b.item)} x${b.count}`).join('\n');
+  return `${t('listBuild')}:\n${lines(plan.build || [])}\n\n${t('listMaterials')}:\n${lines(matList)}`;
+}
+let cfgDefault = null;
+const cfg = () => S.config || cfgDefault;
+function setConfig(key, value){
+  if (!cfg()) return;
+  S.config = {...cfg(), [key]:value};
+  setNote('cfgOwn');
+  replan();
+}
+function syncSettings(){
+  const seg = (id, cur) => { $(id).innerHTML = [1, 4, 16, 64].map(v => `<button data-v="${v}"${v === cur ? ' class="on"' : ''}>${v}</button>`).join(''); };
+  seg('dBatch', S.batch); seg('dStack', S.stack);
+  $('cSails').value = S.sails;
+  $('cAsk').checked = S.ask;
+  const c = cfg();
+  for (const id of ['cMax', 'cFan', 'cBulkPress', 'cBulkCut', 'cSquare', 'cShapeless', 'cCrafter', 'cStone']) $(id).disabled = !c;
+  if (!c) return;
+  $('cMax').value = c.max_rotation_speed; $('cFan').value = c.fan_processing_time;
+  $('cBulkPress').checked = c.bulk_pressing; $('cBulkCut').checked = c.bulk_cutting;
+  $('cSquare').checked = c.allow_shaped_square_in_press; $('cShapeless').checked = c.allow_shapeless_in_mixer;
+  $('cCrafter').checked = c.allow_regular_crafting_in_crafter; $('cStone').checked = c.allow_stonecutting_on_saw;
+}
+function bindSide(){
+  $('brBody').addEventListener('click', e => { const i = e.target.dataset.i; if (i !== undefined) { S.branches = S.branches.filter((_, k) => k !== +i); replan(); } });
+  $('sMat').addEventListener('toggle', () => { if ($('sMat').open) renderMaterials(); });
+  $('bCopy').addEventListener('click', async () => {
+    const text = materialsText();
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      // Pages opened from a file may have no clipboard access.
+      const area = document.createElement('textarea');
+      area.value = text; document.body.appendChild(area); area.select();
+      document.execCommand('copy'); area.remove();
+    }
+    $('bNote').textContent = t('copied');
+  });
+  $('cAsk').addEventListener('change', e => {
+    S.ask = e.target.checked;
+    try { localStorage.setItem('createcalc.ask', S.ask ? '1' : '0'); } catch (err) { /* Remembering it is only a convenience. */ }
+  });
+  try { if (localStorage.getItem('createcalc.ask') === '0') S.ask = false; } catch (err) { /* Blocked storage keeps the default. */ }
+  const segClick = (id, key) => $(id).addEventListener('click', e => { const v = +e.target.dataset.v; if (v) { S[key] = v; syncSettings(); replan(); } });
+  segClick('dBatch', 'batch'); segClick('dStack', 'stack');
+  $('cSails').addEventListener('change', e => { const v = parseInt(e.target.value, 10); if (v > 0) { S.sails = v; replan(); } });
+  const number = (id, key) => $(id).addEventListener('change', e => { const v = parseFloat(e.target.value); if (v > 0) setConfig(key, v); });
+  number('cMax', 'max_rotation_speed'); number('cFan', 'fan_processing_time');
+  const check = (id, key) => $(id).addEventListener('change', e => setConfig(key, e.target.checked));
+  check('cBulkPress', 'bulk_pressing'); check('cBulkCut', 'bulk_cutting');
+  check('cSquare', 'allow_shaped_square_in_press'); check('cShapeless', 'allow_shapeless_in_mixer');
+  check('cCrafter', 'allow_regular_crafting_in_crafter'); check('cStone', 'allow_stonecutting_on_saw');
+  $('cFile').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try { await applyToml(await file.text(), file.name); } catch (err) { setNote('cfgBad', err.message); }
+    e.target.value = '';
+  });
+  $('cReset').addEventListener('click', () => {
+    S.config = null; S.batch = 1; S.stack = 1; S.sails = 64; S.belt = null;
+    setNote('cfgDefault');
+    syncControls(); syncSettings(); replan();
+  });
+}
+async function applyToml(text, name){
+  const r = await fetch(API + '/api/config/parse', {method:'POST', body:text});
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+  S.config = data;
+  setNote('cfgLoaded', name);
+  syncSettings(); replan();
+}
+async function loadDefaults(){
+  try { cfgDefault = await api('/api/config/default'); } catch (e) { setNote('cfgNoServer'); }
+  syncSettings();
+}
+const edgeKey = e => e.from + '|' + e.to + '|' + e.res;
+function openEdge(key){ panel = {kind:'edge', key}; renderPanel(); }
+function edgePanel(e){
+  const a = G.nodes.get(e.from), b = G.nodes.get(e.to), tr = e.transport;
+  let h = `<div class="ph">${itemIcon(e.res, 28)}<div><h2>${esc(nameOf(e.res))}</h2><div style="color:var(--blue)">${rateText(e.res, e.per_minute)}</div></div></div>`;
+  h += `<h3>${t('flowTitle')}</h3><div class="row"><span>${t('whereFrom')}</span><span class="v">${esc(nameOf(a.res))}</span></div><div class="row"><span>${t('whereTo')}</span><span class="v">${esc(nameOf(b.res))}</span></div>`;
+  if (!tr) return h + `<div class="note">${t('pipesNote')}</div>`;
+  h += `<h3>${t('stackTitle')}</h3><div class="seg" id="eStack">${[1, 4, 16, 64].map(s => `<button data-v="${s}"${s === tr.stack ? ' class="on"' : ''}>${s}</button>`).join('')}</div><div class="note">${t('stackAll')}</div>`;
+  h += `<h3>${t('beltsFunnels')}</h3>`;
+  h += `<div class="row"><span>${t('beltsAt', fmt(tr.belt_rpm))}</span><span class="v p">${tr.belts}</span></div>`;
+  h += `<div class="row"><span>${t('oneFrom')}</span><span class="v">${fmt(tr.min_belt_rpm)} RPM</span></div>`;
+  h += `<div class="row"><span>${t('funnelsLoad')}</span><span class="v p">${tr.funnels}</span></div>`;
+  if (tr.needs_buffer) h += `<div class="note warn">${t('bufferNote', tr.stack)}</div>`;
+  if (S.stacks[e.res]) h += `<div class="btns"><button class="btn" id="eReset">${t('reset')}</button></div>`;
+  return h;
+}
+function bindEdgePanel(e){
+  const seg = $('eStack');
+  if (seg) seg.addEventListener('click', ev => { const v = +ev.target.dataset.v; if (v) { S.stacks[e.res] = v; replan(); } });
+  const reset = $('eReset');
+  if (reset) reset.addEventListener('click', () => { delete S.stacks[e.res]; replan(); });
+}
+
+/* ---------- Canvas interaction ---------- */
+function bindCanvas(){
+  const cv = $('canvas');
+  const CLICK_MS = 300;
+  let drag = null, pressedAt = 0;
+  cv.addEventListener('pointerdown', e => {
+    if (e.button !== 0 && e.button !== 1) return;
+    const card = e.target.closest('.node');
+    const n = card && G.nodes.get(card.dataset.id);
+    const label = e.target.closest('.elabel');
+    pressedAt = performance.now();
+    drag = n ? {n, sx:e.clientX, sy:e.clientY, ox:n.x, oy:n.y, moved:false, rc:!!e.target.closest('[data-rc]')}
+             : {pan:true, edge:label && label.dataset.edge, sx:e.clientX, sy:e.clientY, ox:view.x, oy:view.y, moved:false};
+    cv.setPointerCapture(e.pointerId);
+    if (!n) cv.classList.add('pan');
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+    if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+    drag.moved = true;
+    if (drag.pan) { view.x = drag.ox + dx; view.y = drag.oy + dy; applyView(); return; }
+    const n = drag.n;
+    n.x = drag.ox + dx / view.k; n.y = drag.oy + dy / view.k;
+    pins.set(n.id, {x:n.x, y:n.y});
+    n.el.style.left = n.x + 'px'; n.el.style.top = n.y + 'px';
+    renderEdges();
+  });
+  const up = () => {
+    if (!drag) return;
+    cv.classList.remove('pan');
+    // A long press means the user meant to move it and changed their mind, so nothing opens.
+    if (!drag.moved && performance.now() - pressedAt < CLICK_MS) { if (drag.n) openNode(drag.n.id, drag.rc); else if (drag.edge) openEdge(drag.edge); else if (panel) closePanel(); }
+    drag = null;
+  };
+  cv.addEventListener('pointerup', up);
+  cv.addEventListener('pointercancel', up);
+  cv.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * .0012)); }, {passive:false});
+  $('zIn').onclick = () => zoomAt(innerWidth / 2, innerHeight / 2, 1.2);
+  $('zOut').onclick = () => zoomAt(innerWidth / 2, innerHeight / 2, 1 / 1.2);
+  $('zFit').onclick = fit;
+}
+
+/* ---------- Controls ---------- */
+function renderTargets(){
+  $('goalList').innerHTML = S.targets.map((x, i) => `<div class="row" data-i="${i}">${itemIcon(x.item, 18)}<span class="gn" title="${esc(nameOf(x.item))}">${esc(nameOf(x.item))}</span><input class="inp gper" type="number" min="0.01" step="any" value="${x.per}" aria-label="${t('perMinuteAria')}"><button class="rc x" aria-label="${t('remove')}">&times;</button></div>`).join('')
+    || `<div class="note">${t('addHint')}</div>`;
+}
+function syncControls(){
+  renderTargets();
+  $('rpm').value = S.rpm; $('belt').value = S.belt ?? ''; $('belt').placeholder = S.rpm; $('heat').checked = S.heat;
+  document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.v === S.mode));
+}
+/* ---------- Item search: a list floating over everything, so it never resizes what it sits on ---------- */
+// The whole item list is already on the page, so a search costs no requests. Only pictures do,
+// which is why rows are added as the list scrolls.
+const DROP_PAGE = 30;
+const drop = {input:null, list:[], shown:0, active:0, pick:null, note:null};
+function searchItems(text){
+  const needle = text.trim().toLowerCase();
+  if (!needle) return [];
+  const rank = it => {
+    const name = it.name.toLowerCase();
+    return name === needle ? 0 : name.startsWith(needle) ? 1 : name.includes(needle) ? 2 : 3;
+  };
+  const hit = it => !it.skin && (it.id.includes(needle) || it.en.toLowerCase().includes(needle) || it.ru.toLowerCase().includes(needle));
+  return [...items.values()].filter(hit).sort((a, b) => rank(a) - rank(b));
+}
+const dropRow = i => {
+  const it = drop.list[i];
+  return `<div class="${i === drop.active ? 'on' : ''}" data-i="${i}">${itemIcon(it.id, 20)}<span>${esc(nameOf(it.id))}</span><small>${esc(drop.note(it))}</small></div>`;
+};
+function placeDrop(){
+  const box = $('sugg');
+  if (!drop.input || box.style.display !== 'block') return;
+  const r = drop.input.parentElement.getBoundingClientRect(), top = drop.input.getBoundingClientRect().bottom + 4;
+  box.style.left = r.left + 'px'; box.style.width = r.width + 'px'; box.style.top = top + 'px';
+  box.style.maxHeight = Math.max(120, Math.min(420, innerHeight - top - 12)) + 'px';
+}
+function paintDrop(){
+  const box = $('sugg'), keep = box.scrollTop;
+  drop.shown = Math.min(drop.list.length, Math.max(drop.shown, drop.active + 1));
+  box.innerHTML = Array.from({length:drop.shown}, (_, i) => dropRow(i)).join('');
+  box.style.display = drop.list.length ? 'block' : 'none';
+  box.scrollTop = keep;
+  placeDrop();
+}
+function hideDrop(){ drop.list = []; $('sugg').style.display = 'none'; }
+function moreDrop(){
+  const box = $('sugg');
+  if (drop.shown >= drop.list.length || box.scrollTop + box.clientHeight < box.scrollHeight - 80) return;
+  const from = drop.shown;
+  drop.shown = Math.min(drop.list.length, from + DROP_PAGE);
+  box.insertAdjacentHTML('beforeend', Array.from({length:drop.shown - from}, (_, i) => dropRow(from + i)).join(''));
+}
+function bindItemSearch(input, pick, note){
+  let timer = 0;
+  const run = () => {
+    Object.assign(drop, {input, pick, note, list:searchItems(input.value), shown:DROP_PAGE, active:0});
+    $('sugg').scrollTop = 0;
+    paintDrop();
+    moreDrop();
+  };
+  const step = by => {
+    drop.active = (drop.active + by + drop.list.length) % drop.list.length;
+    paintDrop();
+    const on = $('sugg').querySelector('.on');
+    if (on) on.scrollIntoView({block:'nearest'});
+  };
+  input.addEventListener('focus', run);
+  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 130); });
+  input.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== input) hideDrop(); }, 100));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown' && drop.list.length) { step(1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp' && drop.list.length) { step(-1); e.preventDefault(); }
+    else if (e.key === 'Enter' && drop.list[drop.active]) drop.pick(drop.list[drop.active]);
+    else if (e.key === 'Escape') { input.value = ''; hideDrop(); input.blur(); e.stopPropagation(); }
+  });
+}
+function bindDrop(){
+  const box = $('sugg');
+  // Taking the press keeps the focus in the search box, so the list stays open.
+  box.addEventListener('pointerdown', e => {
+    const row = e.target.closest('[data-i]');
+    e.preventDefault();
+    if (row) drop.pick(drop.list[+row.dataset.i]);
+  });
+  box.addEventListener('scroll', moreDrop);
+  addEventListener('resize', placeDrop);
+  // Whatever the search box sits in may scroll while the list is open.
+  addEventListener('scroll', e => { if (e.target !== box) placeDrop(); }, true);
+}
+function bindControls(){
+  const input = $('search');
+  let numTimer = 0;
+  const later = opts => { clearTimeout(numTimer); numTimer = setTimeout(() => replan(opts), 250); };
+  const chosen = id => S.targets.some(x => x.item === id);
+  // The list stays open so several items can be picked in a row, and a second click takes one back.
+  bindItemSearch(input, it => {
+    if (chosen(it.id)) S.targets = S.targets.filter(x => x.item !== it.id);
+    else {
+      const per = parseFloat($('newPer').value);
+      S.targets = [...S.targets, {item:it.id, per:per > 0 ? per : 60}];
+    }
+    renderTargets(); paintDrop(); later({fit:true});
+  }, it => chosen(it.id) ? t('added') : it.id.split(':')[0]);
+  $('goalList').addEventListener('input', e => {
+    const row = e.target.closest('[data-i]'), v = parseFloat(e.target.value);
+    if (row && v > 0) { S.targets[+row.dataset.i].per = v; later(); }
+  });
+  $('goalList').addEventListener('click', e => {
+    if (!e.target.classList.contains('x')) return;
+    S.targets = S.targets.filter((_, i) => i !== +e.target.closest('[data-i]').dataset.i);
+    renderTargets(); later({fit:true});
+  });
+  const num = (id, key) => $(id).addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    if (!(v > 0)) return;
+    S[key] = v;
+    clearTimeout(numTimer); numTimer = setTimeout(() => replan(), 250);
+  });
+  num('rpm', 'rpm');
+  $('belt').addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    S.belt = v > 0 ? v : null;
+    clearTimeout(numTimer); numTimer = setTimeout(() => replan(), 250);
+  });
+  $('mode').addEventListener('click', e => { const v = e.target.dataset.v; if (v && v !== S.mode) { S.mode = v; syncControls(); replan(); } });
+  $('heat').addEventListener('change', e => { S.heat = e.target.checked; replan(); });
+  $('totals').addEventListener('click', () => { if (panel && panel.kind === 'load') closePanel(); else { panel = {kind:'load'}; renderPanel(); } });
+  $('jeiBtn').addEventListener('click', () => { if (panel && panel.kind === 'item') closePanel(); else openItem(S.targets.length ? S.targets[0].item : 'create:andesite_alloy', 'made'); });
+  $('close').addEventListener('click', closePanel);
+  $('aboutBtn').addEventListener('click', openAbout);
+  $('langs').addEventListener('click', e => { if (e.target.dataset.v) setLang(e.target.dataset.v); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && panel && document.activeElement !== input) closePanel(); });
+}
+
+/* ---------- Start. The hash can preset a scenario: #item=...&per=...&rpm=...&mode=...&open=<node id>&panel=load ---------- */
+async function start(){
+  const h = new URLSearchParams(location.hash.slice(1));
+  let saved = null;
+  try { saved = localStorage.getItem('createcalc.lang'); } catch (e) { /* Blocked storage just means the default language. */ }
+  lang = h.get('lang') || saved || 'en';
+  applyLang();
+  // #item=a&per=60 for one target, #targets=a*60,b*30 for several.
+  if (h.get('item')) S.targets = [{item:h.get('item'), per:+h.get('per') || 60}];
+  if (h.get('targets')) S.targets = h.get('targets').split(',').map(x => { const [item, per] = x.split('*'); return {item, per:+per || 60}; });
+  if (h.get('rpm')) S.rpm = +h.get('rpm');
+  if (h.get('mode')) S.mode = h.get('mode');
+  if (h.get('heat') === '0') S.heat = false;
+  if (h.get('belt')) S.belt = +h.get('belt');
+  if (h.get('stack')) S.stacks = JSON.parse(h.get('stack'));
+  bindCanvas(); bindDrop(); bindControls(); bindSide(); bindTips(); syncControls(); applyView(); await loadDefaults();
+  await replan({fit:true});
+  syncControls();
+  if (h.get('open')) openNode(h.get('open'));
+  if (h.get('edge')) openEdge(h.get('edge'));
+  if (h.get('panel') === 'load') { panel = {kind:'load'}; renderPanel(); }
+  if (h.get('settings')) { $('sSet').open = true; $('sMat').open = false; }
+}
+start();
+</script>
+</body>
+</html>
