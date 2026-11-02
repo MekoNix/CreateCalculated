@@ -24,6 +24,7 @@ button,input,select{font:inherit;color:inherit}
 .node{position:absolute;width:260px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:9px 10px 7px;cursor:pointer;user-select:none}
 .node:active{cursor:grabbing}
 .node:hover{border-color:var(--line2)}
+.head.more{margin-top:5px}
 .node.by{background:#17191c}
 .node.by .head .t{color:#b4b8be;font-weight:500}
 .node.by .head .r{color:#9ea3ab}
@@ -356,50 +357,31 @@ function show(p, opts){
 /* ---------- Graph model ---------- */
 function buildGraph(p){
   const nodes = new Map(), goals = new Set();
-  const main = new Map(p.nodes.filter(n => n.type === 'recipe').map(n => [n.id, nodeRes(n)]));
-  const isSide = e => main.has(e.from) && e.res !== main.get(e.from);
-  for (const e of p.edges) if (e.to.startsWith('target:') && !isSide(e)) goals.add(e.from);
+  for (const e of p.edges) if (e.to.startsWith('target:')) goals.add(e.from);
   for (const n of p.nodes) {
     if (n.type === 'target') continue;
     const m = {...n, res:nodeRes(n), goal:goals.has(n.id), h:100, x:0, y:0, ins:[], outs:[]};
     m.rate = n.type === 'recipe' ? outputRate(n, recipes.get(n.recipe), m.res) : n.per_minute;
     nodes.set(n.id, m);
   }
+  // A by-product is what the scheme neither uses nor asked for, so only those edges are dashed.
   const edges = [];
-  const connect = edge => { edges.push(edge); nodes.get(edge.from).outs.push(edge); nodes.get(edge.to).ins.push(edge); };
-  // A by-product gets a grey card of its own, one per item. The graph runs recipe, card, consumer,
-  // but the belt is one physical line, so its transport stays on the part leaving the card.
-  const card = res => {
-    const id = 'by:' + res;
-    if (!nodes.has(id)) nodes.set(id, {id, type:'byproduct', res, rate:0, leftover:0, goal:false, h:100, x:0, y:0, ins:[], outs:[]});
-    return nodes.get(id);
-  };
-  const fed = new Map();
   for (const e of p.edges) {
-    if (!nodes.has(e.from) || (!nodes.has(e.to) && !e.to.startsWith('target:'))) continue;
-    if (!isSide(e)) {
-      if (nodes.has(e.to)) connect({...e, side:false});
-      continue;
+    const src = nodes.get(e.from);
+    if (!src) continue;
+    const toEnd = e.to.startsWith('surplus:');
+    // Every output the scheme does use is listed on the recipe's card.
+    if (!toEnd && src.type === 'recipe' && e.res !== src.res) {
+      src.more = src.more || new Map();
+      src.more.set(e.res, outputRate(src, recipes.get(src.recipe), e.res));
     }
-    const c = card(e.res);
-    c.rate += e.per_minute;
-    fed.set(e.from + '|' + c.id, (fed.get(e.from + '|' + c.id) || 0) + e.per_minute);
-    if (e.to.startsWith('target:')) c.goal = true;
-    else if (e.to.startsWith('surplus:')) {
-      c.leftover += e.per_minute;
-      const s = nodes.get(e.to);
-      s.rate -= e.per_minute;
-      if (s.rate <= 1e-6) nodes.delete(e.to);
-    } else connect({...e, from:c.id, side:false});
-  }
-  for (const [key, flow] of fed) {
-    const [from, to] = key.split('|');
-    connect({from, to, res:nodes.get(to).res, per_minute:flow, side:true});
+    if (!nodes.has(e.to)) continue;
+    const edge = {...e, side:toEnd};
+    edges.push(edge); src.outs.push(edge); nodes.get(e.to).ins.push(edge);
   }
   G = {nodes, edges};
 }
-// Ends of the graph sit beside their source instead of taking part in the main layering.
-const isEnd = n => n.type === 'surplus' || (n.type === 'byproduct' && !n.outs.length);
+const isEnd = n => n.type === 'surplus';
 
 /* ---------- Layout: layered, left to right ---------- */
 function layout(){
@@ -583,7 +565,7 @@ function statsRows(loads, ownRpm, extraRight){
   const full = Math.max(...loads.map(x => x.count ? x.exact / x.count : 0));
   const su = loads.reduce((s, x) => s + x.su, 0);
   const pct = l.machine === 'hand' ? '' : `<span class="r2 ${full >= .95 ? 'tight' : ''}">загрузка ${Math.ceil(full * 100 - 1e-6)}%</span>`;
-  const blocks = l.stream_blocks ? `<span class="r2">поток ${Math.ceil(l.stream_blocks)} бл.</span>` : '';
+  const blocks = l.stream_blocks ? `<span class="r2" title="Сумма по всем вентиляторам: предмет должен пробыть в потоке всё время обработки">лента в потоке ${Math.ceil(l.stream_blocks)} бл.</span>` : '';
   return `<div class="stats">${speed}${pct || '<span></span>'}<span>${su ? fmt(su) + ' SU' : '<span class="muted">без SU</span>'}</span>${extraRight || blocks || '<span></span>'}</div>`;
 }
 function cardHtml(n){
@@ -591,20 +573,17 @@ function cardHtml(n){
   if (n.type === 'recipe') {
     const kind = recipes.get(n.recipe).kind;
     const burn = S.heat && n.burners ? `<span class="r2 heat">${n.heat === 'superheated' ? 'перегрев' : 'нагрев'} ×${n.burners}</span>` : '';
-    return head + machineRows(n, kind) + statsRows(n.loads, !!(S.overrides[n.recipe] && S.overrides[n.recipe].rpm), burn);
+    const more = [...(n.more || [])].map(([res, rate]) => `<div class="head more">${itemIcon(res, 24)}<div><div class="t" title="${esc(nameOf(res))}">${esc(nameOf(res))}</div><div class="r">${rateText(res, rate)}</div></div></div>`).join('');
+    return head + more + machineRows(n, kind) + statsRows(n.loads, !!(S.overrides[n.recipe] && S.overrides[n.recipe].rpm), burn);
   }
-  if (n.type === 'byproduct') {
-    const left = n.leftover > 1e-6 ? `<div class="sub">в остатке ${rateText(n.res, n.leftover)}</div>` : '';
-    return head + `<div class="sub">побочный вывод</div>` + left;
-  }
-  if (n.type === 'surplus') return head + `<div class="sub">остаток производства</div>`;
+  if (n.type === 'surplus') return head + `<div class="sub">побочный вывод</div>`;
   if (n.type === 'stock') return head + `<div class="sub green">со склада</div>`;
-  const load = n.load ? `<div class="mach">${machineIcon(n.load.machine, 18)}<span class="name">${esc(MACH[n.load.machine])}<span class="proc">на генераторе</span></span><span class="x">×${n.load.count}</span></div>${statsRows([n.load], false)}` : '';
+  const load = n.load ? `<div class="mach">${machineIcon(n.load.machine, 18)}<span class="name">${esc(MACH[n.load.machine])}</span><span class="x">×${n.load.count}</span></div>${statsRows([n.load], false)}` : '';
   return head + `<div class="sub green">${PICK}базовый ресурс — снабжение</div>` + load;
 }
 function renderNodes(){
   const box = $('nodes');
-  box.innerHTML = [...G.nodes.values()].map(n => `<div class="node${n.goal ? ' goal' : ''}${n.type === 'byproduct' || n.type === 'surplus' ? ' by' : ''}" data-id="${esc(n.id)}">${cardHtml(n)}</div>`).join('');
+  box.innerHTML = [...G.nodes.values()].map(n => `<div class="node${n.goal ? ' goal' : ''}${n.type === 'surplus' ? ' by' : ''}" data-id="${esc(n.id)}">${cardHtml(n)}</div>`).join('');
   box.querySelectorAll('.node').forEach(el => { const n = G.nodes.get(el.dataset.id); n.el = el; n.h = el.offsetHeight; });
 }
 function renderPositions(){
@@ -737,7 +716,8 @@ function flowRows(list, side){
   return list.map(e => {
     const other = side === 'in' ? G.nodes.get(e.from) : G.nodes.get(e.to);
     const note = e.side ? 'побочн.' : '';
-    return `<div class="row">${itemIcon(e.res, 18)}<span>${esc(nameOf(e.res))}</span>${note ? `<span class="d">${note}</span>` : ''}<span class="v" title="${esc(nameOf(other.res))}">${rateText(e.res, e.per_minute)}</span></div>`;
+    const open = side === 'out' ? ` go" data-item="${esc(e.res)}` : '';
+    return `<div class="row${open}">${itemIcon(e.res, 18)}<span>${esc(nameOf(e.res))}</span>${note ? `<span class="d">${note}</span>` : ''}<span class="v" title="${esc(nameOf(other.res))}">${rateText(e.res, e.per_minute)}</span></div>`;
   }).join('');
 }
 function recipeLabel(id){
@@ -769,7 +749,7 @@ function nodePanel(n){
       h += `<h3>Партия</h3><div class="seg" id="pBatch">${[1, 4, 16, 64].map(b => `<button data-v="${b}"${b === cur ? ' class="on"' : ''}>${b}</button>`).join('')}</div>`;
     }
     if (n.loads.length > 1) h += `<h3>Шаги сборки</h3>` + n.loads.map((s, i) => `<div class="row">${machineIcon(s.machine, 18)}<span>${i + 1}. ${esc(MACH[s.machine])}</span><span class="d">${fmt(s.su)} SU</span><span class="v p">×${s.count}</span></div>`).join('');
-    if (l.stream_blocks) h += `<h3>Вентилятор</h3><div class="row"><span>Длина потока</span><span class="v p">${fmt(l.stream_blocks)} бл.</span></div><div class="row"><span>Максимум RPM ленты</span><span class="v p">${fmt(l.max_belt_rpm)}</span></div>`;
+    if (l.stream_blocks) h += `<h3>Вентилятор</h3><div class="row"><span>Лента в потоке, всего</span><span class="v p">${fmt(l.stream_blocks)} бл.</span></div><div class="row"><span>Максимум RPM ленты</span><span class="v p">${fmt(l.max_belt_rpm)}</span></div>`;
     h += `<h3>Входы</h3>${flowRows(ins, 'in') || '<div class="note">Нет</div>'}`;
     h += `<h3>Выходы</h3>${flowRows(outs, 'out') || `<div class="note">Только конечная цель</div>`}`;
     h += `<div class="btns"><button class="btn" id="pStock">Со склада</button><button class="btn" id="pReset">Сбросить</button></div>`;
@@ -821,6 +801,7 @@ function setOverride(recipe, key, value){
 }
 function bindNodePanel(n){
   const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
+  document.querySelectorAll('#panelBody [data-item]').forEach(row => row.addEventListener('click', () => openItem(row.dataset.item, 'uses')));
   on('pJei', 'click', () => openItem(n.res, n.type === 'surplus' ? 'uses' : 'made'));
   on('pRecipe', 'change', e => { const v = e.target.value; confirmChange(() => { S.choice[n.res] = v; }); });
   on('pMachine', 'change', e => setOverride(n.recipe, 'machine', e.target.value));
@@ -847,7 +828,7 @@ function openNode(id, focusRecipe){
   const n = G.nodes.get(id);
   if (!n) return;
   // A leftover is mostly a question of what it could become.
-  if (n.type === 'surplus' || n.type === 'byproduct') { openItem(n.res, 'uses'); return; }
+  if (n.type === 'surplus') { openItem(n.res, 'uses'); return; }
   panel = {kind:'node', id, res:n.res};
   renderPanel();
   const r = n.el.getBoundingClientRect(), limit = innerWidth - 340 - 16;
@@ -1138,7 +1119,7 @@ function edgePanel(e){
   const a = G.nodes.get(e.from), b = G.nodes.get(e.to), t = e.transport;
   let h = `<div class="ph">${itemIcon(e.res, 28)}<div><h2>${esc(nameOf(e.res))}</h2><div style="color:var(--blue)">${rateText(e.res, e.per_minute)}</div></div></div>`;
   h += `<h3>Поток</h3><div class="row"><span>Откуда</span><span class="v">${esc(nameOf(a.res))}</span></div><div class="row"><span>Куда</span><span class="v">${esc(nameOf(b.res))}</span></div>`;
-  if (!t) return h + `<div class="note">${isFluid(e.res) ? 'Жидкость идёт по трубам, они не считаются.' : 'Лента настраивается на потоке, который идёт от этой карточки дальше.'}</div>`;
+  if (!t) return h + `<div class="note">Жидкость идёт по трубам, они не считаются.</div>`;
   h += `<h3>Размер стопки</h3><div class="seg" id="eStack">${[1, 4, 16, 64].map(s => `<button data-v="${s}"${s === t.stack ? ' class="on"' : ''}>${s}</button>`).join('')}</div><div class="note">Для всех потоков этого предмета.</div>`;
   h += `<h3>Лента и воронки</h3>`;
   h += `<div class="row"><span>Лент при ${fmt(t.belt_rpm)} RPM</span><span class="v p">${t.belts}</span></div>`;
