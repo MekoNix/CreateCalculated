@@ -24,7 +24,11 @@ button,input,select{font:inherit;color:inherit}
 .node{position:absolute;width:260px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:9px 10px 7px;cursor:pointer;user-select:none}
 .node:active{cursor:grabbing}
 .node:hover{border-color:var(--line2)}
-.head.more{margin-top:5px}
+.node>.mach:first-child{border-top:0;margin-top:0;padding-top:0}
+.outs{border-top:1px solid var(--line);margin-top:6px;padding-top:4px}
+.outs .lbl{color:var(--dim);font-size:11px;line-height:15px;margin-bottom:2px}
+.outs .head+.head{margin-top:4px}
+.far .outs .lbl{visibility:hidden}
 .node.by{background:#17191c}
 .node.by .head .t{color:#b4b8be;font-weight:500}
 .node.by .head .r{color:#9ea3ab}
@@ -569,17 +573,21 @@ function statsRows(loads, ownRpm, extraRight){
   return `<div class="stats">${speed}${pct || '<span></span>'}<span>${su ? fmt(su) + ' SU' : '<span class="muted">без SU</span>'}</span>${extraRight || blocks || '<span></span>'}</div>`;
 }
 function cardHtml(n){
-  const head = `<div class="head">${itemIcon(n.res, 24)}<div><div class="t" title="${esc(nameOf(n.res))}">${esc(nameOf(n.res))}</div><div class="r">${rateText(n.res, n.rate)}</div></div></div>`;
+  const row = (res, rate) => `<div class="head">${itemIcon(res, 24)}<div><div class="t" title="${esc(nameOf(res))}">${esc(nameOf(res))}</div><div class="r">${rateText(res, rate)}</div></div></div>`;
+  const head = row(n.res, n.rate);
+  // The machine comes first and its products under it, so nothing above reads as an input.
+  const output = rows => `<div class="outs"><div class="lbl">выход</div>${rows}</div>`;
   if (n.type === 'recipe') {
     const kind = recipes.get(n.recipe).kind;
     const burn = S.heat && n.burners ? `<span class="r2 heat">${n.heat === 'superheated' ? 'перегрев' : 'нагрев'} ×${n.burners}</span>` : '';
-    const more = [...(n.more || [])].map(([res, rate]) => `<div class="head more">${itemIcon(res, 24)}<div><div class="t" title="${esc(nameOf(res))}">${esc(nameOf(res))}</div><div class="r">${rateText(res, rate)}</div></div></div>`).join('');
-    return head + more + machineRows(n, kind) + statsRows(n.loads, !!(S.overrides[n.recipe] && S.overrides[n.recipe].rpm), burn);
+    const more = [...(n.more || [])].map(([res, rate]) => row(res, rate)).join('');
+    return machineRows(n, kind) + statsRows(n.loads, !!(S.overrides[n.recipe] && S.overrides[n.recipe].rpm), burn) + output(head + more);
   }
   if (n.type === 'surplus') return head + `<div class="sub">побочный вывод</div>`;
   if (n.type === 'stock') return head + `<div class="sub green">со склада</div>`;
-  const load = n.load ? `<div class="mach">${machineIcon(n.load.machine, 18)}<span class="name">${esc(MACH[n.load.machine])}</span><span class="x">×${n.load.count}</span></div>${statsRows([n.load], false)}` : '';
-  return head + `<div class="sub green">${PICK}базовый ресурс — снабжение</div>` + load;
+  const base = `<div class="sub green">${PICK}базовый ресурс — снабжение</div>`;
+  if (n.load) return `<div class="mach">${machineIcon(n.load.machine, 18)}<span class="name">${esc(MACH[n.load.machine])}</span><span class="x">×${n.load.count}</span></div>${statsRows([n.load], false)}` + output(head) + base;
+  return head + base;
 }
 function renderNodes(){
   const box = $('nodes');
