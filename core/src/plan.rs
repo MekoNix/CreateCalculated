@@ -25,6 +25,7 @@ const FLUID_COST_PER_MB: f64 = 1e-3;
 /// Editable lists of what players normally gather.
 const MINED_RESOURCES: &str = include_str!("../data/mined_resources.txt");
 const FARM_RESOURCES: &str = include_str!("../data/farm_resources.txt");
+const MATERIAL_RESOURCES: &str = include_str!("../data/material_resources.txt");
 const EPS: f64 = 1e-6;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +52,8 @@ pub enum Origin {
     Generator,
     Farm,
     Mined,
+    /// A ready material, only with `stop_at_materials`.
+    Material,
     Unusual,
 }
 
@@ -88,6 +91,8 @@ pub struct PlanRequest {
     pub stack: u32,
     /// Stack size per item.
     pub stack_sizes: BTreeMap<ResId, u32>,
+    /// Stops at ready materials such as ingots instead of going down to ore.
+    pub stop_at_materials: bool,
 }
 
 impl Default for PlanRequest {
@@ -107,6 +112,7 @@ impl Default for PlanRequest {
             belt_rpm: None,
             stack: 1,
             stack_sizes: BTreeMap::new(),
+            stop_at_materials: false,
         }
     }
 }
@@ -233,6 +239,9 @@ fn gatherable(cat: &Catalog, req: &PlanRequest) -> HashMap<ResId, Origin> {
             parse_list(cat, file_lines(FARM_RESOURCES), Origin::Farm, &mut out);
             parse_list(cat, GENERATORS.iter().map(|g| g.to_string()), Origin::Generator, &mut out);
         }
+    }
+    if req.stop_at_materials {
+        parse_list(cat, file_lines(MATERIAL_RESOURCES), Origin::Material, &mut out);
     }
     out.retain(|r, _| !req.recipe_choice.contains_key(r));
     out

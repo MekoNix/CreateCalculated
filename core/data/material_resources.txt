@@ -1,0 +1,13 @@
+# Ready materials a player keeps in storage. With `stop_at_materials` a plan goes no deeper than
+# these, so a shopping list says iron ingots rather than iron ore.
+# One id per line. `#` followed by a namespace id is a tag.
+
+minecraft:iron_ingot
+minecraft:copper_ingot
+minecraft:gold_ingot
+minecraft:netherite_ingot
+create:zinc_ingot
+create:brass_ingot
+create:andesite_alloy
+minecraft:glass
+#minecraft:planks

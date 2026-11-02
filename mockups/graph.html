@@ -744,7 +744,7 @@ function buildPanel(){
   if (!list.length) return `<div class="ph"><h2>Материалы</h2></div><div class="note">Для этой схемы ничего строить не нужно.</div>`;
   let h = `<div class="ph"><h2>Материалы</h2></div><h3>Что построить</h3>` + list.map(b => buildRow(b.item, b.count)).join('');
   h += `<div class="note">Лента указана по числу линий, её длина зависит от постройки. Валы, шестерни, трубы, насосы и источники энергии не входят.</div>`;
-  h += `<div class="btns"><button class="btn" id="bCopy">Скопировать</button><button class="btn" id="bRaw">Посчитать сырьё</button></div><div class="note" id="bNote"></div><div id="bRawList"></div>`;
+  h += `<div class="btns"><button class="btn" id="bCopy">Скопировать</button><button class="btn" id="bRaw">Посчитать материалы</button></div><div class="note" id="bNote"></div><div id="bRawList"></div>`;
   return h;
 }
 function buildText(){
@@ -768,10 +768,10 @@ function bindBuildPanel(){
   $('bRaw').addEventListener('click', async () => {
     // Each amount is requested as a rate per minute, so one minute of the plan is the whole list.
     try {
-      const p = await api('/api/plan', {targets:plan.build.map(b => ({item:b.item, per_minute:b.count})), rpm:S.rpm, mode:S.mode});
-      const raw = p.nodes.filter(n => n.type === 'gather' || n.type === 'generate');
+      const p = await api('/api/plan', {targets:plan.build.map(b => ({item:b.item, per_minute:b.count})), rpm:S.rpm, stop_at_materials:true});
+      const raw = p.nodes.filter(n => n.type === 'gather').sort((a, b) => (a.origin !== 'material') - (b.origin !== 'material') || b.per_minute - a.per_minute);
       const left = p.nodes.filter(n => n.type === 'surplus');
-      let h = `<h3>Сырьё на всю постройку</h3>` + (raw.map(n => buildRow(n.res, Math.ceil(n.per_minute))).join('') || '<div class="note">Нет</div>');
+      let h = `<h3>Материалы на всю постройку</h3>` + (raw.map(n => buildRow(n.res, Math.ceil(n.per_minute))).join('') || '<div class="note">Нет</div>');
       if (left.length) h += `<h3>Останется лишнего</h3>` + left.map(n => buildRow(n.res, Math.floor(n.per_minute))).join('');
       $('bRawList').innerHTML = h;
     } catch (e) { $('bNote').textContent = e.http ? e.message : 'Сервер недоступен.'; }

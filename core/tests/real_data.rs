@@ -94,3 +94,15 @@ fn full_auto_mines_rather_than_conjures_a_potion() {
     assert!(p.manual.iter().all(|m| !m.contains("potion")), "{:?}", p.manual);
     assert_eq!(gathered(&p), ["minecraft:redstone"]);
 }
+
+#[test]
+fn materials_stop_at_ingots() {
+    let Some(cat) = catalog() else { return };
+    let mut req = PlanRequest { targets: vec![Target { item: "create:mechanical_press".into(), per_minute: 1.0 }], ..Default::default() };
+    req.stop_at_materials = true;
+    let p = plan(&cat, &req).unwrap();
+    let list = gathered(&p).join(" ");
+    assert!(list.contains("minecraft:iron_ingot") && list.contains("create:andesite_alloy"), "{list}");
+    assert!(!list.contains("raw_"), "{list}");
+    assert!(p.warnings.is_empty(), "{:?}", p.warnings);
+}
