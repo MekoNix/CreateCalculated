@@ -9,6 +9,7 @@ use createcalc_core::config::Config;
 use createcalc_core::model::Catalog;
 use createcalc_core::plan::{consumers, plan, producers, Plan, PlanError, PlanRequest};
 use createcalc_core::power::{plan_power, PowerPlan};
+use createcalc_core::share;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -129,6 +130,27 @@ async fn power(Json(req): Json<PowerRequest>) -> Result<Json<PowerPlan>, ApiErro
     Ok(Json(plan_power(req.su, req.sails, &req.config)))
 }
 
+#[derive(Deserialize)]
+struct ShareRequest {
+    #[serde(flatten)]
+    request: PlanRequest,
+    #[serde(default = "default_sails")]
+    sails: u32,
+}
+
+/// Writes a scheme as a code for a share link. Nothing is stored, the code is all there is.
+async fn make_share(Json(body): Json<ShareRequest>) -> Result<Json<serde_json::Value>, ApiError> {
+    if body.request.targets.is_empty() {
+        return Err(ApiError(StatusCode::BAD_REQUEST, "no targets".into()));
+    }
+    Ok(Json(serde_json::json!({ "code": share::encode(&body.request, body.sails) })))
+}
+
+async fn read_share(State(cat): State<Shared>, Path(code): Path<String>) -> Result<Json<serde_json::Value>, ApiError> {
+    let read = share::decode(&cat, &code).map_err(|e| ApiError(StatusCode::BAD_REQUEST, e))?;
+    Ok(Json(serde_json::json!({ "request": read.request, "sails": read.sails, "has_config": read.has_config, "missing": read.missing })))
+}
+
 /// Only names createcalc-icons writes, so a request cannot reach anything else on the disk.
 fn is_icon_path(path: &str) -> bool {
     let plain = |part: &str| !part.is_empty() && !part.starts_with('.') && part.bytes().all(|c| matches!(c, b'a'..=b'z' | b'0'..=b'9' | b'_' | b'-' | b'.'));
@@ -157,6 +179,7 @@ pub fn app(cat: Arc<Catalog>, icons: PathBuf) -> Router {
     let pictures = Router::new().route("/api/icons/{*path}", get(icon_file)).with_state(Arc::new(icons));
     Router::new()
         .route("/", get(|| async { Html(PAGE) }))
+        .route("/share/{code}", get(|| async { Html(PAGE) }))
         .route("/api/health", get(|| async { "ok" }))
         .route("/api/items", get(items))
         .route("/api/tags/defaults", get(tag_defaults))
@@ -167,6 +190,8 @@ pub fn app(cat: Arc<Catalog>, icons: PathBuf) -> Router {
         .route("/api/config/parse", post(parse_config))
         .route("/api/plan", post(make_plan))
         .route("/api/power", post(power))
+        .route("/api/share", post(make_share))
+        .route("/api/share/{code}", get(read_share))
         .with_state(cat)
         .merge(pictures)
         .layer(CorsLayer::permissive())

@@ -75,6 +75,10 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 #side .gadd #search{flex:1;width:auto;min-width:0}
 #side .gadd #newPer{width:58px;flex:none}
 #goalList{margin-top:6px}
+#shareRow{margin-top:8px}
+#shareRow[hidden]{display:none}
+#side #shareUrl{display:block;width:100%;margin-top:6px}
+#side #shareUrl[hidden]{display:none}
 #goalList .row{gap:6px}
 #goalList .gn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #side #goalList .gper{width:62px;height:24px;flex:none}
@@ -202,6 +206,9 @@ input[type=number]::-webkit-inner-spin-button{display:none}
     <div class="seg wide" id="mode"><button data-v="normal" data-t="modeNormal" data-tip="tipNormal"></button><button data-v="full_auto" data-t="modeAuto" data-tip="tipAuto"></button></div>
     <div class="gadd"><input id="search" class="inp" data-t-ph="addItem" data-t-aria="addItem" autocomplete="off" spellcheck="false"><input id="newPer" class="inp" type="number" min="0.01" step="any" value="60" data-t-title="newRate" data-t-aria="newRate"><span class="d" data-t="perMin"></span></div>
     <div id="goalList"></div>
+    <div class="btns" id="shareRow"><button class="btn" id="bShare" data-t="share" data-tip="tipShare"></button></div>
+    <input id="shareUrl" class="inp" readonly hidden data-t-aria="share">
+    <div class="note" id="shareNote"></div>
   </div></details>
   <details id="sBr" open hidden><summary data-t="branches"></summary><div class="sb" id="brBody"></div></details>
   <details id="sMat" open hidden><summary data-t="materials"></summary><div class="sb">
@@ -303,6 +310,7 @@ const STR = {
   listBuild:['Построить','Build'], listMaterials:['Материалы','Materials'], copied:['Список скопирован.','List copied.'], flowTitle:['Поток','Flow'], pipesNote:['Жидкость идёт по трубам, они не считаются.','Fluids go through pipes, which are not counted.'], stackTitle:['Размер стопки','Stack size'], stackAll:['Для всех потоков этого предмета.','For all flows of this item.'], beltsFunnels:['Лента и шлюзы','Belts and funnels'], beltsAt:['Лент при {0} RPM','Belts at {0} RPM'], oneFrom:['Хватит одной от','One is enough from'], funnelsLoad:['Шлюзов на загрузку','Funnels for loading'],
   bufferNote:['Источник отдаёт меньше стопки за раз, а на ленте стопки сами не собираются. Нужен ящик и латунный шлюз, настроенный ровно на {0} шт.','The source hands over less than a stack at a time, and stacks do not form on a belt by themselves. It needs a chest and a brass funnel set to exactly {0} items.'],
   withAxe:[': топор в руке',': axe in hand'], stripNote:['Деплоер с топором бьёт по поставленному бревну. Учтён только сам удар: установка и разрушение блока и износ топора не считаются.','A deployer with an axe hits a placed log. Only the hit is counted: placing and breaking the block and axe wear are not.'],
+  share:['Поделиться','Share'], tipShare:['Сделать ссылку на эту схему: цели, рецепты и настройки. На сервере ничего не хранится, сайт посчитает всё заново по ссылке, поэтому в новой версии игры результат может измениться.','Make a link to this scheme: targets, recipes and settings. Nothing is stored on the server, the site works it out again from the link, so a new version of the game can change the result.'], shareCopied:['Ссылка скопирована.','Link copied.'], shareBad:['Ссылка повреждена или сделана в другой версии.','This link is broken or from another version.'], shareMissing:['Часть ссылки больше не существует, пропущено: {0}.','Part of this link no longer exists, left out: {0}.'],
   addHint:['Добавьте предмет. Можно сразу несколько: общие детали посчитаются вместе.','Add an item. Several work too: shared parts are counted together.'], added:['добавлено','added'],
   github:['GitHub','GitHub'], about:['О сайте','About'], aboutIntro:['CreateCalculated: калькулятор производства для мода Create и аддонов к нему.','CreateCalculated is a production calculator for Create mod and Create addons.'], aboutPictures:['Картинки предметов','Item pictures'],
   aboutPicturesText:['Картинки предметов собраны из файлов игры и принадлежат их авторам. Предметы Minecraft принадлежат Mojang, действует Minecraft EULA. Предметы Create принадлежат команде Create, на их ассеты действует All Rights Reserved. Предметы аддонов принадлежат авторам аддонов. Этот сайт не связан с Mojang и командой Create.','Item pictures are rendered from the game\'s files and belong to their authors. Minecraft items belong to Mojang, under the Minecraft EULA. Create items belong to the Create team, their assets are All Rights Reserved. Addon items belong to the authors of the addons. This site is not affiliated with Mojang or the Create team.'],
@@ -350,6 +358,7 @@ function setLang(next){
   applyLang();
   syncItemNames();
   hideDrop();
+  clearShare();
   renderTargets();
   if (plan) show(plan, {});
   if (!$('ask').hidden && $('aboutClose')) renderAbout();
@@ -502,6 +511,7 @@ const nodeRes = n => n.type === 'recipe' ? (n.produces || mainRes(recipes.get(n.
 const EMPTY_PLAN = {nodes:[], edges:[], total_su:0, machines:{}, heat:null, warnings:[], manual:[], build:[], branches:[]};
 async function replan(opts = {}){
   const my = ++seq;
+  clearShare();
   if (!S.targets.length) {
     // Branches hang off a scheme, so with nothing left to make they go too.
     S.branches = [];
@@ -522,6 +532,19 @@ async function replan(opts = {}){
     if (my !== seq) return;
     setStatus(e.http ? (/^invalid request: rpm/.test(e.message) ? t('rpmRange') : e.message) : t('noServer'), true);
   }
+}
+// A link describes the scheme it was made from, so any change makes it old.
+function clearShare(){ $('shareUrl').hidden = true; $('shareUrl').value = ''; $('shareNote').textContent = ''; }
+// A share address opens with the scheme it carries. The hash form is for scripted checks of a page opened as a file.
+async function loadShared(h){
+  const code = (location.pathname.match(/^\/share\/([\w-]+)\/?$/) || [])[1] || h.get('share');
+  if (!code) return '';
+  try {
+    const d = await api('/api/share/' + encodeURIComponent(code)), r = d.request;
+    Object.assign(S, {targets:r.targets.map(x => ({item:x.item, per:x.per_minute})), rpm:r.rpm, mode:r.mode, heat:r.include_heat, belt:r.belt_rpm, batch:r.batch, stack:r.stack, funnel:r.funnel, stock:r.stock, choice:r.recipe_choice, overrides:Object.fromEntries(Object.entries(r.overrides).map(([id, o]) => [id, Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null))])), stacks:r.stack_sizes, branches:r.branches, sails:d.sails, config:d.has_config ? r.config : null});
+    if (d.has_config) noteArgs = ['cfgOwn'];
+    return d.missing ? t('shareMissing', d.missing) : '';
+  } catch (e) { return e.http ? t('shareBad') : t('noServer'); }
 }
 function setStatus(t, err){ const s = $('status'); s.textContent = t; s.className = err ? 'err' : ''; }
 
@@ -1293,21 +1316,33 @@ function syncSettings(){
   $('cSquare').checked = c.allow_shaped_square_in_press; $('cShapeless').checked = c.allow_shapeless_in_mixer;
   $('cCrafter').checked = c.allow_regular_crafting_in_crafter; $('cStone').checked = c.allow_stonecutting_on_saw;
 }
+async function copyText(text){
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    // Pages opened from a file or without https may have no clipboard access.
+    const area = document.createElement('textarea');
+    area.value = text; document.body.appendChild(area); area.select();
+    document.execCommand('copy'); area.remove();
+  }
+}
 function bindSide(){
   $('brBody').addEventListener('click', e => { const i = e.target.dataset.i; if (i !== undefined) { S.branches = S.branches.filter((_, k) => k !== +i); replan(); } });
   $('sMat').addEventListener('toggle', () => { if ($('sMat').open) renderMaterials(); });
   $('bCopy').addEventListener('click', async () => {
-    const text = materialsText();
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch (e) {
-      // Pages opened from a file may have no clipboard access.
-      const area = document.createElement('textarea');
-      area.value = text; document.body.appendChild(area); area.select();
-      document.execCommand('copy'); area.remove();
-    }
+    await copyText(materialsText());
     $('bNote').textContent = t('copied');
   });
+  $('bShare').addEventListener('click', async () => {
+    try {
+      const {code} = await api('/api/share', {...request(), sails:S.sails});
+      const url = API + '/share/' + code, box = $('shareUrl');
+      box.value = url; box.hidden = false;
+      await copyText(url);
+      $('shareNote').textContent = t('shareCopied');
+    } catch (e) { $('shareNote').textContent = e.http ? e.message : t('noServer'); }
+  });
+  $('shareUrl').addEventListener('focus', e => e.target.select());
   $('cAsk').addEventListener('change', e => {
     S.ask = e.target.checked;
     try { localStorage.setItem('createcalc.ask', S.ask ? '1' : '0'); } catch (err) { /* Remembering it is only a convenience. */ }
@@ -1416,6 +1451,7 @@ function bindCanvas(){
 
 /* ---------- Controls ---------- */
 function renderTargets(){
+  $('shareRow').hidden = !S.targets.length;
   $('goalList').innerHTML = S.targets.map((x, i) => `<div class="row" data-i="${i}">${itemIcon(x.item, 18)}<span class="gn" title="${esc(nameOf(x.item))}">${esc(nameOf(x.item))}</span><input class="inp gper" type="number" min="0.01" step="any" value="${x.per}" aria-label="${t('perMinuteAria')}"><button class="rc x" aria-label="${t('remove')}">&times;</button></div>`).join('')
     || `<div class="note">${t('addHint')}</div>`;
 }
@@ -1621,9 +1657,12 @@ async function start(){
   if (h.get('heat') === '0') S.heat = false;
   if (h.get('belt')) S.belt = +h.get('belt');
   if (h.get('stack')) S.stacks = JSON.parse(h.get('stack'));
+  const sharedNotice = await loadShared(h);
   bindCanvas(); bindDrop(); bindLangs(); bindControls(); bindSide(); bindTips(); syncControls(); applyView(); await loadDefaults();
+  if (noteArgs[0] === 'cfgOwn') setNote('cfgOwn');
   await replan({fit:true});
   syncControls();
+  if (sharedNotice) setStatus(sharedNotice, true);
   if (h.get('open')) openNode(h.get('open'));
   if (h.get('edge')) openEdge(h.get('edge'));
   if (h.get('panel') === 'load') { panel = {kind:'load'}; renderPanel(); }
