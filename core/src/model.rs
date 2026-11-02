@@ -117,6 +117,9 @@ pub struct Bundle {
     pub names: BTreeMap<ResId, Names>,
 }
 
+/// Recipes made by the importer for an axe in a deployer's hand, see `import::add_stripping_recipes`.
+pub const STRIPPING_PREFIX: &str = "createcalc:stripping/";
+
 /// Items that stand for a tag, their names and what they replace.
 const TAG_DEFAULTS: &str = include_str!("../data/tag_defaults.txt");
 

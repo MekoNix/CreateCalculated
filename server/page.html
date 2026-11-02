@@ -135,6 +135,7 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 .btn.file input{display:none}
 .inp.wide{width:100%;margin-top:8px}
 .seg.wide{display:flex;margin-top:8px}
+#mode button{flex:1 1 auto;white-space:nowrap}
 .seg.wide button{flex:1;padding:0 4px;font-size:11.5px}
 .rcp{border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin-top:6px;background:var(--card)}
 .rcp[hidden]{display:none}
@@ -290,6 +291,7 @@ const STR = {
   newResources:['Новые ресурсы','New resources'], willChange:['Изменится','Will change'], noLongerNeeded:['Больше не нужно','No longer needed'], stressTitle:['Нагрузка','Stress'], recalculated:['Схема будет пересчитана','The scheme will be recalculated'], yes:['Да','Yes'], noLeftover:['нет остатка','nothing left'], allLeftShort:['весь остаток','all that is left'], remove:['Убрать','Remove'], 
   listBuild:['Построить','Build'], listMaterials:['Материалы','Materials'], copied:['Список скопирован.','List copied.'], flowTitle:['Поток','Flow'], pipesNote:['Жидкость идёт по трубам, они не считаются.','Fluids go through pipes, which are not counted.'], stackTitle:['Размер стопки','Stack size'], stackAll:['Для всех потоков этого предмета.','For all flows of this item.'], beltsFunnels:['Лента и воронки','Belts and funnels'], beltsAt:['Лент при {0} RPM','Belts at {0} RPM'], oneFrom:['Хватит одной от','One is enough from'], funnelsLoad:['Воронок на загрузку','Funnels for loading'],
   bufferNote:['Источник отдаёт меньше стопки за раз, а на ленте стопки сами не собираются. Нужен ящик и воронка с фильтром на {0} шт.','The source hands over less than a stack at a time, and stacks do not form on a belt by themselves. It needs a chest and a funnel filtered to {0} items.'],
+  withAxe:[': топор в руке',': axe in hand'], stripNote:['Деплоер с топором бьёт по поставленному бревну. Учтён только сам удар: установка и разрушение блока и износ топора не считаются.','A deployer with an axe hits a placed log. Only the hit is counted: placing and breaking the block and axe wear are not.'],
   addHint:['Добавьте предмет. Можно сразу несколько: общие детали посчитаются вместе.','Add an item. Several work too: shared parts are counted together.'], added:['добавлено','added'],
   github:['GitHub','GitHub'], about:['О сайте','About'], aboutIntro:['CreateCalculated: калькулятор производства для мода Create и аддонов к нему.','CreateCalculated is a production calculator for Create mod and Create addons.'], aboutPictures:['Картинки предметов','Item pictures'],
   aboutPicturesText:['Картинки предметов собраны из файлов игры и принадлежат их авторам. Предметы Minecraft принадлежат Mojang, действует Minecraft EULA. Предметы Create принадлежат команде Create, на их ассеты действует All Rights Reserved. Предметы аддонов принадлежат авторам аддонов. Этот сайт не связан с Mojang и командой Create.','Item pictures are rendered from the game\'s files and belong to their authors. Minecraft items belong to Mojang, under the Minecraft EULA. Create items belong to the Create team, their assets are All Rights Reserved. Addon items belong to the authors of the addons. This site is not affiliated with Mojang or the Create team.'],
@@ -386,6 +388,7 @@ function nameOf(id){
   const key = real(id), it = items.get(key);
   return it && it.name && it.name !== key ? it.name : readable(key);
 }
+const isStripping = id => id.startsWith('createcalc:stripping/');
 const machineName = (m, kind) => m === 'fan' && FAN[kind] || MACH[m] || readable(m);
 
 /* ---------- Icons: pictures from createcalc-icons, letters where there is no picture ---------- */
@@ -739,7 +742,7 @@ function machineRows(n, kind){
   }
   return loads.map(l => {
     const batch = l.machine === 'crushing_wheels' || l.machine === 'fan' ? t('batchShort', l.items_per_op) : '';
-    const needs = l.machine === 'fan' && CATALYST[kind] ? ': ' + CATALYST[kind] : '';
+    const needs = (l.machine === 'fan' && CATALYST[kind] ? ': ' + CATALYST[kind] : '') + (isStripping(n.recipe) ? t('withAxe') : '');
     return row(l.machine, l.count, '', proc(kind) + needs + batch, rcBtn);
   }).join('');
 }
@@ -940,6 +943,7 @@ function nodePanel(n){
       h += `<div class="row"><span>${t(l.machine === 'fan' ? 'perStreamBlock' : 'perMachine')}</span><span class="v p">${fmt(perUnit)}${t('perMin')}</span></div>`;
       if (l.machine === 'fan') h += `<div class="note">${t('fanRpmNote')}</div>`;
     }
+    if (isStripping(n.recipe)) h += `<div class="note">${t('stripNote')}</div>`;
     if (n.loads.length === 1 && (l.machine === 'crushing_wheels' || l.machine === 'fan')) {
       const cur = over.batch || 1;
       h += `<h3>${t('batchTitle')}</h3><div class="seg" id="pBatch">${[1, 4, 16, 64].map(b => `<button data-v="${b}"${b === cur ? ' class="on"' : ''}>${b}</button>`).join('')}</div>`;
@@ -1070,7 +1074,7 @@ function recipeRow(r, tab, res){
   if (tab === 'made') act = mine ? `<span class="d">${t('inScheme')}</span>` : `<button class="btn sm" data-use="${esc(r.id)}">${t('use')}</button>`;
   else act = (mine ? `<span class="d">${t('inScheme')}</span> ` : '') + `<button class="btn sm" data-add="${esc(r.id)}">${t('addToScheme')}</button>`;
   const others = r.outputs.length > 1 ? ` <span class="d">+${r.outputs.length - 1}</span>` : '';
-  return `<div class="rcp" data-search="${esc(search)}"><div class="rl"><span class="rt"><span class="rn">${esc(nameOf(mainRes(r)))}</span>${others}<span class="d rk">${esc(method(r.kind))}</span></span>${act}</div><div class="rf">${ins}<span class="ar">&rarr;</span>${outs}</div></div>`;
+  return `<div class="rcp" data-search="${esc(search)}"><div class="rl"><span class="rt"><span class="rn">${esc(nameOf(mainRes(r)))}</span>${others}<span class="d rk">${esc(method(r.kind) + (isStripping(r.id) ? t('withAxe') : ''))}</span></span>${act}</div><div class="rf">${ins}<span class="ar">&rarr;</span>${outs}</div></div>`;
 }
 async function renderItemPanel(){
   const p = panel, body = $('panelBody');

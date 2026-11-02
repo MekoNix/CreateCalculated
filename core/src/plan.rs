@@ -6,7 +6,7 @@
 
 use crate::config::Config;
 use crate::machines::{self, Load, Machine, Transport};
-use crate::model::{Catalog, Heat, Recipe, RecipeKind, ResId};
+use crate::model::{Catalog, Heat, Recipe, RecipeKind, ResId, STRIPPING_PREFIX};
 use crate::power::{CAKE_BURN_TICKS, COAL_BURN_TICKS};
 use good_lp::{constraint, variable, variables, Expression, Solution, SolverModel, Variable};
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 const RUN_COST: f64 = 0.01;
 /// Cost of a recipeless item that is not on the base resource list.
 const UNUSUAL_RAW_COST: f64 = 1000.0;
-const STRIPPED_RAW_COST: f64 = 1.5;
 /// Taking another member of a tag than its default must save more than a step of work,
 /// see `Catalog::tag_default`. Raw materials cost far more, so real savings still win.
 const OTHER_TAG_MEMBER_COST: f64 = RUN_COST;
@@ -263,9 +262,10 @@ fn gatherable(cat: &Catalog, req: &PlanRequest) -> HashMap<ResId, Origin> {
         None => {
             parse_list(cat, file_lines(MINED_RESOURCES), Origin::Mined, &mut out);
             parse_list(cat, file_lines(FARM_RESOURCES), Origin::Farm, &mut out);
-            // The log tag holds bark blocks too, and those are crafted from logs. The flower tag
-            // holds the wither rose, which grows only where a wither has killed something.
-            out.retain(|r, _| !r.ends_with("_wood") && !r.ends_with("_hyphae") && r != "minecraft:wither_rose");
+            // The log tag also holds bark blocks, crafted from logs, and stripped logs, made with
+            // an axe. The flower tag holds the wither rose, which grows only where a wither has
+            // killed something.
+            out.retain(|r, _| !r.ends_with("_wood") && !r.ends_with("_hyphae") && !r.contains(":stripped_") && r != "minecraft:wither_rose");
             parse_list(cat, GENERATORS.iter().map(|g| g.to_string()), Origin::Generator, &mut out);
         }
     }
@@ -376,14 +376,12 @@ fn raw_costs(cat: &Catalog, recipes: &BTreeSet<usize>, resources: &BTreeSet<ResI
         .iter()
         .map(|r| {
             let unit = if r.contains("fluid:") { FLUID_COST_PER_MB } else { 1.0 };
-            // Stripping is extra work, so plain logs win when a recipe accepts both.
-            let stripped = if r.contains(":stripped_") { STRIPPED_RAW_COST } else { 1.0 };
             let price = match (base.get(r), mode) {
                 // Not scaled for fluids: a potion nobody can make must not beat digging for redstone.
                 (None, _) => return (r.clone(), UNUSUAL_RAW_COST),
-                (Some(_), Mode::Normal) => stripped,
+                (Some(_), Mode::Normal) => 1.0,
                 (Some(Origin::Generator), Mode::FullAuto) => AUTO_GENERATOR_COST,
-                (Some(Origin::Farm), Mode::FullAuto) => AUTO_FARM_COST * stripped,
+                (Some(Origin::Farm), Mode::FullAuto) => AUTO_FARM_COST,
                 (Some(_), Mode::FullAuto) => AUTO_MINED_COST,
             };
             (r.clone(), unit * price)
@@ -843,6 +841,10 @@ fn build_list(cat: &Catalog, nodes: &[Node], edges: &[Edge]) -> Vec<BuildItem> {
                 }
                 if *burners > 0 {
                     *items.entry("create:blaze_burner").or_default() += burners;
+                }
+                // Any axe does, each deployer holds one.
+                if r.id.starts_with(STRIPPING_PREFIX) {
+                    *items.entry("minecraft:iron_axe").or_default() += loads.iter().map(|l| l.count).sum::<u32>();
                 }
             }
             NodeKind::Generate { load: Some(load), .. } => {

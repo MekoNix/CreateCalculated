@@ -158,7 +158,7 @@ fn wood_is_oak_whatever_the_mode() {
     }
     let lever = solve(&cat, "create:analog_lever");
     let raw = gathered(&lever);
-    assert!(raw.contains(&"minecraft:oak_log") && raw.contains(&"minecraft:stripped_oak_log"), "{raw:?}");
+    assert_eq!(raw.iter().filter(|r| r.contains("oak")).collect::<Vec<_>>(), [&"minecraft:oak_log"], "{raw:?}");
     assert_eq!(cat.name("minecraft:oak_log", "en"), "Wood");
     assert_eq!(cat.name("minecraft:oak_planks", "ru"), "Доски");
 }
@@ -172,6 +172,23 @@ fn glass_comes_from_plain_sand_and_black_dye_from_ink() {
         let dye = plan(&cat, &PlanRequest { targets: vec![Target { item: "minecraft:black_dye".into(), per_minute: 60.0 }], mode, ..Default::default() }).unwrap();
         assert!(!items_used(&dye).contains(&"minecraft:wither_rose"), "{:?}", items_used(&dye));
     }
+}
+
+#[test]
+fn stripped_wood_comes_from_a_deployer_with_an_axe() {
+    let Some(cat) = catalog() else { return };
+    for mode in [Mode::Normal, Mode::FullAuto] {
+        let p = plan(&cat, &PlanRequest { targets: vec![Target { item: "minecraft:stripped_oak_log".into(), per_minute: 60.0 }], mode, ..Default::default() }).unwrap();
+        assert_eq!(gathered(&p), ["minecraft:oak_log"]);
+        let deployer = p.nodes.iter().any(|n| matches!(&n.kind, NodeKind::Recipe { recipe, .. } if recipe == "createcalc:stripping/minecraft/oak_log"));
+        assert!(deployer, "{:?}", p.nodes);
+        assert!(p.build.iter().any(|b| b.item == "minecraft:iron_axe" && b.count == 1), "{:?}", p.build);
+    }
+    // Every species and bamboo has its recipe, a stripped log has none.
+    for id in ["minecraft/warped_stem", "minecraft/crimson_hyphae", "minecraft/bamboo_block", "minecraft/dark_oak_wood"] {
+        assert!(cat.recipe(&format!("createcalc:stripping/{id}")).is_some(), "{id}");
+    }
+    assert!(cat.recipe("createcalc:stripping/minecraft/stripped_oak_log").is_none());
 }
 
 #[test]

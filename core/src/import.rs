@@ -1,7 +1,7 @@
 //! Builds a [`Bundle`] from mod JARs. Game data is never stored in this repository:
 //! every user generates the bundle locally from their own files.
 
-use crate::model::{AssemblyStep, Bundle, Heat, Names, Output, Recipe, RecipeKind, ResId, Stack};
+use crate::model::{AssemblyStep, Bundle, Heat, Names, Output, Recipe, RecipeKind, ResId, STRIPPING_PREFIX, Stack};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::File;
@@ -450,9 +450,36 @@ pub fn import_jars(paths: &[&Path]) -> Result<(Bundle, ImportStats), String> {
             Err(e) => stats.failed.push(format!("{id}: {e}")),
         }
     }
+    add_stripping_recipes(&mut recipes, &tags);
     stats.recipes = recipes.len();
     let names = collect_names(&pack);
     Ok((Bundle { recipes, tags, names }, stats))
+}
+
+/// An axe strips logs through the game's code rather than a recipe file: Create only shows it in
+/// JEI (`LogStrippingFakeRecipes`), and a deployer does it by using the axe on a placed log
+/// (`DeployerHandler`). So these recipes are made here, for every log that has a stripped form.
+pub fn add_stripping_recipes(recipes: &mut Vec<Recipe>, tags: &BTreeMap<ResId, Vec<ResId>>) {
+    let logs: BTreeSet<&ResId> = ["#minecraft:logs", "#minecraft:bamboo_blocks"].iter().filter_map(|t| tags.get(*t)).flatten().collect();
+    for log in &logs {
+        let Some((ns, path)) = log.split_once(':') else { continue };
+        let stripped = format!("{ns}:stripped_{path}");
+        if !logs.contains(&stripped) {
+            continue;
+        }
+        recipes.push(Recipe {
+            id: format!("{STRIPPING_PREFIX}{ns}/{path}"),
+            kind: RecipeKind::Deploying,
+            inputs: vec![Stack { res: (*log).clone(), amount: 1.0 }],
+            outputs: vec![Output { res: stripped, amount: 1.0, chance: 1.0 }],
+            duration: 0,
+            heat: Heat::None,
+            cells: 0,
+            square: false,
+            steps: vec![],
+            loops: 0,
+        });
+    }
 }
 
 fn collect_names(pack: &Pack) -> BTreeMap<ResId, Names> {

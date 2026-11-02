@@ -178,6 +178,8 @@ beltsAt,Belts at {0} RPM,Лент при {0} RPM
 oneFrom,One is enough from,Хватит одной от
 funnelsLoad,Funnels for loading,Воронок на загрузку
 bufferNote,"The source hands over less than a stack at a time, and stacks do not form on a belt by themselves. It needs a chest and a funnel filtered to {0} items.","Источник отдаёт меньше стопки за раз, а на ленте стопки сами не собираются. Нужен ящик и воронка с фильтром на {0} шт."
+withAxe,: axe in hand,: топор в руке
+stripNote,A deployer with an axe hits a placed log. Only the hit is counted: placing and breaking the block and axe wear are not.,Деплоер с топором бьёт по поставленному бревну. Учтён только сам удар: установка и разрушение блока и износ топора не считаются.
 addHint,Add an item. Several work too: shared parts are counted together.,Добавьте предмет. Можно сразу несколько: общие детали посчитаются вместе.
 added,added,добавлено
 github,GitHub,GitHub
