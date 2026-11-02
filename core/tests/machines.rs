@@ -16,8 +16,8 @@ fn press_cycle() {
 #[test]
 fn mixer_cycle() {
     // The head stays down in steady work, so a recipe costs the timer plus one tick to set it.
-    // The code gives 17 at 256 RPM, the game measured 26.4, so the measured limit applies.
-    assert_eq!(mixer_ticks(256.0, 0), MIXER_MIN_TICKS);
+    // 16 + 1 at 256 RPM. The game measured 70 items a minute, which is 17 ticks.
+    assert_eq!(mixer_ticks(256.0, 0), 17);
     // 512 / 93 = 5, log2 floors to 2: 2 * 15 + 1 + 1 = 32. The game measured 32.4.
     assert_eq!(mixer_ticks(93.0, 0), 32);
     // 512 / 128 = 4, log2 = 2: the same 32, also as measured.

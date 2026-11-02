@@ -170,7 +170,7 @@ fn heat_statistic_can_be_turned_off() {
     let cat = catalog();
     let p = plan(&cat, &request("brass", 60.0)).unwrap();
     let heat = p.heat.clone().unwrap();
-    // 30 runs a minute at 27 ticks: 0.675 of a mixer, so 1 mixer and 1 burner.
+    // 30 runs a minute at 17 ticks: 0.425 of a mixer, so 1 mixer and 1 burner.
     assert_eq!(heat.burners_heated, 1);
     close(heat.coal_per_min, 0.75);
     let mut req = request("brass", 60.0);
