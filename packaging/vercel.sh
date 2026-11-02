@@ -37,6 +37,7 @@ cat >"$out/config.json" <<'JSON'
   "version": 3,
   "routes": [
     {"src": "/api/icons/.+\\.png", "headers": {"cache-control": "public, max-age=31536000, immutable"}, "continue": true},
+    {"src": "/share/[^/]+/?", "dest": "/index.html"},
     {"handle": "filesystem"},
     {"src": "/api(/.*)?", "dest": "/api"}
   ]
