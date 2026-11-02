@@ -22,7 +22,11 @@ button,input,select{font:inherit;color:inherit}
 .elabel span.n{margin-top:1px;padding:0 2px;background:var(--bg);border-radius:2px;line-height:13px}
 .ic{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:2px;font-weight:600;line-height:1;letter-spacing:-.02em;user-select:none}
 .node{position:absolute;width:260px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:9px 10px 7px;cursor:pointer;user-select:none}
+.node:active{cursor:grabbing}
 .node:hover{border-color:var(--line2)}
+.node.by{background:#17191c}
+.node.by .head .t{color:#b4b8be;font-weight:500}
+.node.by .head .r{color:#9ea3ab}
 .node.goal{border-color:var(--gold);border-width:1.5px;padding:8.5px 9.5px 6.5px}
 .node.sel{border-color:#9fb2c6}
 .node.goal.sel{border-color:#f0d58a}
@@ -159,7 +163,7 @@ input[type=number]::-webkit-inner-spin-button{display:none}
   <details id="sMat" open><summary>Материалы</summary><div class="sb">
     <h3>Что построить</h3><div id="matBuild"></div>
     <h3>Материалы на всю постройку</h3><div id="matRaw"></div>
-    <div class="note">Лента указана по числу линий. Валы, трубы, насосы и источники энергии не входят.</div>
+    <div class="note">Лента указана по числу линий. Валы, трубы, насосы, источники энергии и то, что стоит в потоке вентиляторов (вода, лава, огонь), не входят.</div>
     <div class="btns"><button class="btn" id="bCopy">Скопировать</button></div><div class="note" id="bNote"></div>
   </div></details>
   <details id="sSet"><summary>Настройки</summary><div class="sb">
@@ -233,6 +237,8 @@ const MACH = {press:'Механический пресс', mixer:'Механич
 const FAN = {splashing:'Вентилятор + вода (промывка)', haunting:'Вентилятор + огонь душ (преследование)', smelting:'Вентилятор + лава (плавка)', blasting:'Вентилятор + лава (плавка)', smoking:'Вентилятор + огонь (копчение)'};
 const KIND = {pressing:'Прессование', compacting:'Уплотнение', mixing:'Смешивание', milling:'Помол', crushing:'Дробление', cutting:'Распил', deploying:'Деплоер', filling:'Наполнение', emptying:'Слив', splashing:'Промывка', haunting:'Преследование', smelting:'Плавка', blasting:'Плавка', smoking:'Копчение', crafting_shaped:'Крафт', crafting_shapeless:'Крафт', mechanical_crafting:'Механический крафт', stonecutting:'Камнерез', smithing:'Кузнечный стол', sequenced_assembly:'Сборка'};
 const SOURCES = {water_wheel:'Водяное колесо', large_water_wheel:'Большое водяное колесо', windmill_bearing:'Мельница (64 паруса)', steam_engine_level:'Уровень паровых двигателей'};
+// What has to stand in the fan's stream, from Create's fan_processing_catalysts tags.
+const CATALYST = {splashing:'вода', haunting:'огонь душ', smelting:'лава или бёрнер', blasting:'лава или бёрнер', smoking:'огонь или костёр'};
 const machineName = (m, kind) => m === 'fan' && FAN[kind] || MACH[m] || readable(m);
 
 /* ---------- Icon: replace this function when real icons become available ---------- */
@@ -350,7 +356,9 @@ function show(p, opts){
 /* ---------- Graph model ---------- */
 function buildGraph(p){
   const nodes = new Map(), goals = new Set();
-  for (const e of p.edges) if (e.to.startsWith('target:')) goals.add(e.from);
+  const main = new Map(p.nodes.filter(n => n.type === 'recipe').map(n => [n.id, nodeRes(n)]));
+  const isSide = e => main.has(e.from) && e.res !== main.get(e.from);
+  for (const e of p.edges) if (e.to.startsWith('target:') && !isSide(e)) goals.add(e.from);
   for (const n of p.nodes) {
     if (n.type === 'target') continue;
     const m = {...n, res:nodeRes(n), goal:goals.has(n.id), h:100, x:0, y:0, ins:[], outs:[]};
@@ -358,20 +366,45 @@ function buildGraph(p){
     nodes.set(n.id, m);
   }
   const edges = [];
+  const connect = edge => { edges.push(edge); nodes.get(edge.from).outs.push(edge); nodes.get(edge.to).ins.push(edge); };
+  // A by-product gets a grey card of its own, one per item. The graph runs recipe, card, consumer,
+  // but the belt is one physical line, so its transport stays on the part leaving the card.
+  const card = res => {
+    const id = 'by:' + res;
+    if (!nodes.has(id)) nodes.set(id, {id, type:'byproduct', res, rate:0, leftover:0, goal:false, h:100, x:0, y:0, ins:[], outs:[]});
+    return nodes.get(id);
+  };
+  const fed = new Map();
   for (const e of p.edges) {
-    if (e.to.startsWith('target:') || !nodes.has(e.from) || !nodes.has(e.to)) continue;
-    const src = nodes.get(e.from);
-    const edge = {...e, side:src.type === 'recipe' && e.res !== src.res};
-    edges.push(edge); src.outs.push(edge); nodes.get(e.to).ins.push(edge);
+    if (!nodes.has(e.from) || (!nodes.has(e.to) && !e.to.startsWith('target:'))) continue;
+    if (!isSide(e)) {
+      if (nodes.has(e.to)) connect({...e, side:false});
+      continue;
+    }
+    const c = card(e.res);
+    c.rate += e.per_minute;
+    fed.set(e.from + '|' + c.id, (fed.get(e.from + '|' + c.id) || 0) + e.per_minute);
+    if (e.to.startsWith('target:')) c.goal = true;
+    else if (e.to.startsWith('surplus:')) {
+      c.leftover += e.per_minute;
+      const s = nodes.get(e.to);
+      s.rate -= e.per_minute;
+      if (s.rate <= 1e-6) nodes.delete(e.to);
+    } else connect({...e, from:c.id, side:false});
   }
-  for (const n of nodes.values()) if (n.type === 'surplus') n.byproduct = n.ins.every(e => e.side);
+  for (const [key, flow] of fed) {
+    const [from, to] = key.split('|');
+    connect({from, to, res:nodes.get(to).res, per_minute:flow, side:true});
+  }
   G = {nodes, edges};
 }
+// Ends of the graph sit beside their source instead of taking part in the main layering.
+const isEnd = n => n.type === 'surplus' || (n.type === 'byproduct' && !n.outs.length);
 
 /* ---------- Layout: layered, left to right ---------- */
 function layout(){
   const {nodes, edges} = G;
-  const core = [...nodes.values()].filter(n => n.type !== 'surplus');
+  const core = [...nodes.values()].filter(n => !isEnd(n));
   // Break cycles walking upstream from the goal, main flows first, so by-product loops become the back edges.
   const state = new Map();
   for (const e of edges) e.back = false;
@@ -388,7 +421,7 @@ function layout(){
   core.filter(n => n.goal).forEach(n => state.get(n.id) || visit(n));
   core.forEach(n => state.get(n.id) || visit(n));
   // Longest path layers; sources then move right next to their first consumer.
-  const live = e => !e.back && nodes.get(e.to).type !== 'surplus';
+  const live = e => !e.back && !isEnd(nodes.get(e.to));
   const layer = new Map(core.map(n => [n.id, 0]));
   const indeg = new Map(core.map(n => [n.id, n.ins.filter(live).length]));
   const queue = core.filter(n => !indeg.get(n.id));
@@ -404,7 +437,7 @@ function layout(){
     const outs = n.outs.filter(live).map(e => layer.get(e.to));
     if (outs.length) layer.set(n.id, Math.min(...outs) - 1);
   }
-  for (const n of nodes.values()) if (n.type === 'surplus') layer.set(n.id, Math.max(0, ...n.ins.map(e => layer.get(e.from) + 1)));
+  for (const n of nodes.values()) if (isEnd(n)) layer.set(n.id, Math.max(0, ...n.ins.map(e => layer.get(e.from) + 1)));
   const minL = Math.min(...layer.values());
   for (const [k, v] of layer) layer.set(k, v - minL);
   const count = Math.max(...layer.values()) + 1;
@@ -429,7 +462,7 @@ function layout(){
   for (const e of edges) {
     e.via = [];
     if (e.back) continue;
-    const toSurplus = nodes.get(e.to).type === 'surplus';
+    const toSurplus = isEnd(nodes.get(e.to));
     let prev = V.get(e.from);
     for (let l = layer.get(e.from) + 1; l < layer.get(e.to); l++) {
       const d = {id:'d' + e.from + e.to + e.res + l, h:DUMMY_H, dummy:true, pos:0, y:0, nb:[]};
@@ -441,7 +474,7 @@ function layout(){
 
   // Ordering: barycentre sweeps, keeping the arrangement with the fewest crossings.
   const number = c => c.forEach((v, i) => v.pos = i);
-  const surplusLast = c => c.sort((a, b) => (!!(a.node && a.node.type === 'surplus') - !!(b.node && b.node.type === 'surplus')) || 0);
+  const surplusLast = c => c.sort((a, b) => (!!(a.node && isEnd(a.node)) - !!(b.node && isEnd(b.node))) || 0);
   const crossings = () => {
     let total = 0;
     for (let l = 0; l + 1 < count; l++) {
@@ -478,7 +511,7 @@ function layout(){
     let off = 0;
     const blocks = [];
     col.forEach((v, i) => {
-      if (i) off += (col[i - 1].h + v.h) / 2 + (v.node && v.node.type === 'surplus' ? 24 : GAP_Y);
+      if (i) off += (col[i - 1].h + v.h) / 2 + (v.node && isEnd(v.node) ? 24 : GAP_Y);
       let b = {w:want[i][1], z:want[i][0] - off, n:[{v, off}]};
       while (blocks.length && blocks[blocks.length - 1].z >= b.z) {
         const a = blocks.pop();
@@ -538,7 +571,8 @@ function machineRows(n, kind){
   }
   return loads.map(l => {
     const batch = l.machine === 'crushing_wheels' || l.machine === 'fan' ? `, партия ${l.items_per_op}` : '';
-    return row(l.machine, l.count, '', proc(kind) + batch, rcBtn);
+    const needs = l.machine === 'fan' && CATALYST[kind] ? ': ' + CATALYST[kind] : '';
+    return row(l.machine, l.count, '', proc(kind) + needs + batch, rcBtn);
   }).join('');
 }
 // RPM, how full the machines are and stress, the same for recipes and generators.
@@ -559,14 +593,18 @@ function cardHtml(n){
     const burn = S.heat && n.burners ? `<span class="r2 heat">${n.heat === 'superheated' ? 'перегрев' : 'нагрев'} ×${n.burners}</span>` : '';
     return head + machineRows(n, kind) + statsRows(n.loads, !!(S.overrides[n.recipe] && S.overrides[n.recipe].rpm), burn);
   }
-  if (n.type === 'surplus') return head + `<div class="sub">${n.byproduct ? 'побочный продукт (chance-выход)' : 'остаток производства'}</div>`;
+  if (n.type === 'byproduct') {
+    const left = n.leftover > 1e-6 ? `<div class="sub">в остатке ${rateText(n.res, n.leftover)}</div>` : '';
+    return head + `<div class="sub">побочный вывод</div>` + left;
+  }
+  if (n.type === 'surplus') return head + `<div class="sub">остаток производства</div>`;
   if (n.type === 'stock') return head + `<div class="sub green">со склада</div>`;
   const load = n.load ? `<div class="mach">${machineIcon(n.load.machine, 18)}<span class="name">${esc(MACH[n.load.machine])}<span class="proc">на генераторе</span></span><span class="x">×${n.load.count}</span></div>${statsRows([n.load], false)}` : '';
   return head + `<div class="sub green">${PICK}базовый ресурс — снабжение</div>` + load;
 }
 function renderNodes(){
   const box = $('nodes');
-  box.innerHTML = [...G.nodes.values()].map(n => `<div class="node${n.goal ? ' goal' : ''}" data-id="${esc(n.id)}">${cardHtml(n)}</div>`).join('');
+  box.innerHTML = [...G.nodes.values()].map(n => `<div class="node${n.goal ? ' goal' : ''}${n.type === 'byproduct' || n.type === 'surplus' ? ' by' : ''}" data-id="${esc(n.id)}">${cardHtml(n)}</div>`).join('');
   box.querySelectorAll('.node').forEach(el => { const n = G.nodes.get(el.dataset.id); n.el = el; n.h = el.offsetHeight; });
 }
 function renderPositions(){
@@ -809,7 +847,7 @@ function openNode(id, focusRecipe){
   const n = G.nodes.get(id);
   if (!n) return;
   // A leftover is mostly a question of what it could become.
-  if (n.type === 'surplus') { openItem(n.res, 'uses'); return; }
+  if (n.type === 'surplus' || n.type === 'byproduct') { openItem(n.res, 'uses'); return; }
   panel = {kind:'node', id, res:n.res};
   renderPanel();
   const r = n.el.getBoundingClientRect(), limit = innerWidth - 340 - 16;
@@ -839,6 +877,8 @@ function chip(res, amount){
   const clickable = !res.startsWith('#');
   return `<span class="chip${clickable ? ' go' : ''}"${clickable ? ` data-res="${esc(id)}"` : ''} title="${esc(title)}">${itemIcon(id, 18)}<span>${fmt(amount)}</span></span>`;
 }
+// How a recipe is done, including what a fan needs in its stream.
+const method = kind => (KIND[kind] || kind) + (CATALYST[kind] ? ': вентилятор, ' + CATALYST[kind] : '');
 function recipeRow(r, tab, res){
   const outs = r.outputs.map(o => chip(o.res, o.amount * o.chance)).join('');
   const ins = r.inputs.map(s => chip(s.res, s.amount)).join('');
@@ -848,7 +888,7 @@ function recipeRow(r, tab, res){
   if (tab === 'made') act = mine ? '<span class="d">уже в схеме</span>' : `<button class="btn sm" data-use="${esc(r.id)}">Использовать</button>`;
   else act = (mine ? '<span class="d">уже в схеме</span> ' : '') + `<button class="btn sm" data-add="${esc(r.id)}">В схему</button>`;
   const others = r.outputs.length > 1 ? ` <span class="d">+${r.outputs.length - 1}</span>` : '';
-  return `<div class="rcp" data-search="${esc(search)}"><div class="rl"><span class="rt"><span class="rn">${esc(nameOf(mainRes(r)))}</span>${others}<span class="d rk">${esc(KIND[r.kind] || r.kind)}</span></span>${act}</div><div class="rf">${ins}<span class="ar">&rarr;</span>${outs}</div></div>`;
+  return `<div class="rcp" data-search="${esc(search)}"><div class="rl"><span class="rt"><span class="rn">${esc(nameOf(mainRes(r)))}</span>${others}<span class="d rk">${esc(method(r.kind))}</span></span>${act}</div><div class="rf">${ins}<span class="ar">&rarr;</span>${outs}</div></div>`;
 }
 async function renderItemPanel(){
   const p = panel, body = $('panelBody');
@@ -899,7 +939,7 @@ function askBranch(recipe, input){
   const unit = isFluid(main) ? 'мБ' : 'шт';
   // With leftovers around, taking all of them is what the click most likely means.
   let useAll = left > 1e-6, seq = 0, timer;
-  $('askBox').innerHTML = `<h2>${esc(nameOf(main))}</h2><div class="note">${esc(KIND[r.kind] || r.kind)}, из ${esc(nameOf(input))}</div>
+  $('askBox').innerHTML = `<h2>${esc(nameOf(main))}</h2><div class="note">${esc(method(r.kind))}, из ${esc(nameOf(input))}</div>
     <h3>Сколько в минуту</h3>
     <div class="qty"><input id="dPer" class="inp" type="number" min="0.01" step="any" placeholder="${unit} в минуту" aria-label="Количество в минуту"><button class="btn" id="dAll"${left > 1e-6 ? '' : ' disabled'}>Весь остаток${left > 1e-6 ? ' (' + fmt(left) + ' ' + esc(nameOf(input)) + ')' : ''}</button></div>
     <div id="dPreview"></div>
@@ -1098,7 +1138,7 @@ function edgePanel(e){
   const a = G.nodes.get(e.from), b = G.nodes.get(e.to), t = e.transport;
   let h = `<div class="ph">${itemIcon(e.res, 28)}<div><h2>${esc(nameOf(e.res))}</h2><div style="color:var(--blue)">${rateText(e.res, e.per_minute)}</div></div></div>`;
   h += `<h3>Поток</h3><div class="row"><span>Откуда</span><span class="v">${esc(nameOf(a.res))}</span></div><div class="row"><span>Куда</span><span class="v">${esc(nameOf(b.res))}</span></div>`;
-  if (!t) return h + `<div class="note">Жидкость идёт по трубам, они не считаются.</div>`;
+  if (!t) return h + `<div class="note">${isFluid(e.res) ? 'Жидкость идёт по трубам, они не считаются.' : 'Лента настраивается на потоке, который идёт от этой карточки дальше.'}</div>`;
   h += `<h3>Размер стопки</h3><div class="seg" id="eStack">${[1, 4, 16, 64].map(s => `<button data-v="${s}"${s === t.stack ? ' class="on"' : ''}>${s}</button>`).join('')}</div><div class="note">Для всех потоков этого предмета.</div>`;
   h += `<h3>Лента и воронки</h3>`;
   h += `<div class="row"><span>Лент при ${fmt(t.belt_rpm)} RPM</span><span class="v p">${t.belts}</span></div>`;
@@ -1118,12 +1158,14 @@ function bindEdgePanel(e){
 /* ---------- Canvas interaction ---------- */
 function bindCanvas(){
   const cv = $('canvas');
-  let drag = null;
+  const CLICK_MS = 300;
+  let drag = null, pressedAt = 0;
   cv.addEventListener('pointerdown', e => {
     if (e.button !== 0 && e.button !== 1) return;
     const card = e.target.closest('.node');
     const n = card && G.nodes.get(card.dataset.id);
     const label = e.target.closest('.elabel');
+    pressedAt = performance.now();
     drag = n ? {n, sx:e.clientX, sy:e.clientY, ox:n.x, oy:n.y, moved:false, rc:!!e.target.closest('[data-rc]')}
              : {pan:true, edge:label && label.dataset.edge, sx:e.clientX, sy:e.clientY, ox:view.x, oy:view.y, moved:false};
     cv.setPointerCapture(e.pointerId);
@@ -1132,7 +1174,7 @@ function bindCanvas(){
   cv.addEventListener('pointermove', e => {
     if (!drag) return;
     const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
-    if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+    if (!drag.moved && Math.hypot(dx, dy) < 5) return;
     drag.moved = true;
     if (drag.pan) { view.x = drag.ox + dx; view.y = drag.oy + dy; applyView(); return; }
     const n = drag.n;
@@ -1144,7 +1186,8 @@ function bindCanvas(){
   const up = () => {
     if (!drag) return;
     cv.classList.remove('pan');
-    if (!drag.moved) { if (drag.n) openNode(drag.n.id, drag.rc); else if (drag.edge) openEdge(drag.edge); else if (panel) closePanel(); }
+    // A long press means the user meant to move it and changed their mind, so nothing opens.
+    if (!drag.moved && performance.now() - pressedAt < CLICK_MS) { if (drag.n) openNode(drag.n.id, drag.rc); else if (drag.edge) openEdge(drag.edge); else if (panel) closePanel(); }
     drag = null;
   };
   cv.addEventListener('pointerup', up);

@@ -423,6 +423,15 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
     }
     let mut current = req.clone();
     current.branches = vec![];
+    // A branch must not rename the recipes it hangs off, so names come from the scheme without it.
+    let named: HashMap<String, ResId> = solve(cat, &current)?
+        .nodes
+        .into_iter()
+        .filter_map(|n| match n.kind {
+            NodeKind::Recipe { recipe, produces, .. } => Some((recipe, produces)),
+            _ => None,
+        })
+        .collect();
     let mut resolved = Vec::new();
     let mut warnings = Vec::new();
     for b in &req.branches {
@@ -457,6 +466,13 @@ pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
         resolved.push(ResolvedBranch { recipe: b.recipe.clone(), item: main, per_minute });
     }
     let mut result = solve(cat, &current)?;
+    for node in &mut result.nodes {
+        let NodeKind::Recipe { recipe, produces, alternatives, .. } = &mut node.kind else { continue };
+        if let Some(name) = named.get(recipe) {
+            *alternatives = alternatives_for(cat, req, recipe, name);
+            *produces = name.clone();
+        }
+    }
     result.branches = resolved;
     result.warnings.extend(warnings);
     Ok(result)
@@ -751,7 +767,6 @@ fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, stock: &HashSet<
 
 /// Works out what each recipe is there for, and which other recipes could do it.
 fn name_recipe_nodes(cat: &Catalog, req: &PlanRequest, nodes: &mut [Node], edges: &[Edge]) {
-    let disabled: HashSet<&str> = req.disabled_recipes.iter().map(String::as_str).collect();
     for node in nodes {
         let NodeKind::Recipe { recipe, produces, alternatives, .. } = &mut node.kind else { continue };
         let out: Vec<&Edge> = edges.iter().filter(|e| e.from == node.id).collect();
@@ -760,12 +775,17 @@ fn name_recipe_nodes(cat: &Catalog, req: &PlanRequest, nodes: &mut [Node], edges
         if let Some(e) = goal.or(used) {
             *produces = e.res.clone();
         }
-        *alternatives = producers(cat, produces, &req.config)
-            .into_iter()
-            .filter(|r| &r.id != recipe && !disabled.contains(r.id.as_str()))
-            .map(|r| r.id.clone())
-            .collect();
+        *alternatives = alternatives_for(cat, req, recipe, produces);
     }
+}
+
+fn alternatives_for(cat: &Catalog, req: &PlanRequest, recipe: &str, produces: &str) -> Vec<String> {
+    let disabled: HashSet<&str> = req.disabled_recipes.iter().map(String::as_str).collect();
+    producers(cat, produces, &req.config)
+        .into_iter()
+        .filter(|r| r.id != recipe && !disabled.contains(r.id.as_str()))
+        .map(|r| r.id.clone())
+        .collect()
 }
 
 /// Items for one machine of a recipe. Basin work needs a basin under the machine.

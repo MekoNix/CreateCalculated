@@ -115,4 +115,10 @@ fn arrows_use_up_the_flint_from_washing_gravel() {
     let p = plan(&cat, &req).unwrap();
     assert!((p.branches[0].per_minute - 4320.0).abs() < 0.01, "{:?}", p.branches);
     assert!(!p.nodes.iter().any(|n| matches!(&n.kind, NodeKind::Surplus { res, .. } if res == "minecraft:flint")));
+    // Flint is now the larger flow, but washing is still there for the nuggets.
+    let wash = p.nodes.iter().find_map(|n| match &n.kind {
+        NodeKind::Recipe { recipe, produces, .. } if recipe == "create:splashing/gravel" => Some(produces.as_str()),
+        _ => None,
+    });
+    assert_eq!(wash, Some("minecraft:iron_nugget"));
 }
