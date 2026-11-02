@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Create: граф производства</title>
 <style>
-:root{--bg:#121417;--card:#1b1e23;--line:#2e3238;--line2:#3b4048;--text:#e4e6e9;--dim:#8d929a;--blue:#5ca6ee;--orange:#eda83c;--green:#6fd08a;--gold:#d9b65a;--red:#e07a6a}
+:root{--bg:#121417;--card:#1b1e23;--line:#2e3238;--line2:#3b4048;--text:#e4e6e9;--dim:#a3a8b0;--blue:#5ca6ee;--orange:#eda83c;--green:#6fd08a;--gold:#d9b65a;--red:#e07a6a}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--text);font:12px/1.35 "Segoe UI",system-ui,sans-serif;overflow:hidden}
@@ -21,27 +21,35 @@ button,input,select{font:inherit;color:inherit}
 .elabel span.warn,.note.warn{color:#d9a441}
 .elabel span.n{margin-top:1px;padding:0 2px;background:var(--bg);border-radius:2px;line-height:13px}
 .ic{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:2px;font-weight:600;line-height:1;letter-spacing:-.02em;user-select:none}
-.node{position:absolute;width:200px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:9px 10px 7px;cursor:pointer;user-select:none}
+.node{position:absolute;width:260px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:9px 10px 7px;cursor:pointer;user-select:none}
 .node:hover{border-color:var(--line2)}
 .node.goal{border-color:var(--gold);border-width:1.5px;padding:8.5px 9.5px 6.5px}
 .node.sel{border-color:#9fb2c6}
 .node.goal.sel{border-color:#f0d58a}
 .head{display:flex;align-items:center;gap:9px}
-.head .t{font-size:12.5px;font-weight:600;line-height:17px}
-.head .r{color:var(--blue);font-size:11.5px;line-height:17px}
-.sub{margin-top:7px;font-size:10.5px;color:var(--dim);line-height:14px}
+.head>div{flex:1;min-width:0;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.head .t{font-size:14px;font-weight:600;line-height:18px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.head .r{color:var(--blue);font-size:13px;line-height:18px;white-space:nowrap;flex:none}
+.sub{margin-top:7px;font-size:11.5px;color:var(--dim);line-height:14px}
 .sub.green{color:var(--green)}
 .sub svg{vertical-align:-2px;margin-right:3px}
 .mach{display:flex;align-items:center;gap:6px;border-top:1px solid var(--line);margin-top:7px;padding-top:6px;min-height:30px}
 .mach+.mach{border-top:0;margin-top:0;padding-top:1px}
-.mach .name{flex:1;min-width:0;font-size:11.5px;line-height:16px}
-.mach .x{color:var(--orange);font-weight:600;font-size:11.5px;white-space:nowrap;text-align:right;line-height:14px}
-.mach .x small{display:block;color:var(--dim);font-weight:400;font-size:10px;line-height:12px}
-.rc{flex:none;background:none;border:0;padding:0 0 0 2px;color:var(--dim);font-size:10.5px;cursor:pointer}
+.mach .name{flex:1;min-width:0;font-size:13px;line-height:17px}
+.mach .proc{display:block;color:var(--dim);font-size:11.5px;line-height:15px}
+.mach .x{color:var(--orange);font-weight:600;font-size:17px;white-space:nowrap;text-align:right;line-height:20px}
+.mach .x small{display:block;color:var(--dim);font-weight:400;font-size:11px;line-height:13px}
+.rc{flex:none;align-self:stretch;background:none;border:0;padding:0 0 0 3px;color:var(--dim);font-size:12px;cursor:pointer}
 .rc:hover{color:var(--text)}
-.rc::before{content:"";display:inline-block;width:3px;height:3px;border-radius:50%;background:currentColor;margin:0 5px 2px 0}
-.su{display:flex;justify-content:space-between;color:var(--dim);font-size:10.5px;margin-top:3px;line-height:14px}
-.su b{font-weight:400;color:var(--orange)}
+.stats{display:grid;grid-template-columns:1fr auto;gap:1px 10px;border-top:1px solid var(--line);margin-top:6px;padding-top:5px;font-size:12px;line-height:17px;color:var(--text)}
+.stats .r2{text-align:right}
+.stats .own{color:var(--gold)}
+.stats .muted{color:var(--dim)}
+.stats .tight{color:#d9a441}
+.stats .heat{color:var(--orange)}
+.far .stats,.far .proc{visibility:hidden}
+.far .head .t{font-size:18px}
+.far .head .r{font-size:16px}
 /* Bar */
 #bar{position:fixed;left:0;right:0;top:0;height:44px;display:flex;align-items:center;gap:14px;padding:0 12px;background:#17191d;border-bottom:1px solid var(--line);z-index:5}
 .fld{display:flex;align-items:center;gap:6px;color:var(--dim)}
@@ -111,7 +119,7 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 <script>
 'use strict';
 const API = 'http://127.0.0.1:3000';
-const W = 200, GAP_X = 104, GAP_Y = 30, DUMMY_H = 40;
+const W = 260, GAP_X = 104, GAP_Y = 30, DUMMY_H = 40;
 /* Snapshot of one real server response (andesite alloy, 60/min, full_auto). */
 const SNAP = /*SNAP*/{"plan":{"nodes":[{"id":"recipe:create:compacting/andesite_from_flint","type":"recipe","recipe":"create:compacting/andesite_from_flint","produces":"minecraft:andesite","runs_per_min":60.000000000000036,"loads":[{"machine":"press","rpm":256.0,"ticks":10,"items_per_op":1,"exact":0.5000000000000003,"count":1,"su":2048.0}],"heat":"none","burners":0,"alternatives":["create:andesite_from_stone_types_andesite_stonecutting","minecraft:andesite"],"machine_options":["press"]},{"id":"recipe:create:milling/cobblestone","type":"recipe","recipe":"create:milling/cobblestone","produces":"minecraft:gravel","runs_per_min":540.0000000000002,"loads":[{"machine":"millstone","rpm":256.0,"ticks":17,"items_per_op":1,"exact":7.650000000000003,"count":8,"su":8192.0}],"heat":"none","burners":0,"alternatives":[],"machine_options":["millstone","crushing_wheels"]},{"id":"recipe:create:mixing/andesite_alloy","type":"recipe","recipe":"create:mixing/andesite_alloy","produces":"create:andesite_alloy","runs_per_min":59.99999999999998,"loads":[{"machine":"mixer","rpm":256.0,"ticks":57,"items_per_op":1,"exact":2.8499999999999988,"count":3,"su":3072.0}],"heat":"none","burners":0,"alternatives":["create:crafting/materials/andesite_alloy","create:crafting/materials/andesite_alloy_from_block","create:crafting/materials/andesite_alloy_from_zinc","create:mixing/andesite_alloy_from_zinc","create:sequenced_assembly/precision_mechanism"],"machine_options":["mixer"]},{"id":"recipe:create:splashing/gravel","type":"recipe","recipe":"create:splashing/gravel","produces":"minecraft:flint","runs_per_min":480.00000000000017,"loads":[{"machine":"fan","rpm":256.0,"ticks":151,"items_per_op":1,"exact":3.020000000000001,"count":4,"su":2048.0,"stream_blocks":60.40000000000002,"max_belt_rpm":63.576158940397356}],"heat":"none","burners":0,"alternatives":["create:crushing/tuff","create:crushing/tuff_recycling","create:milling/gravel","create:crushing/gravel"],"machine_options":["fan"]},{"id":"generate:fluid:minecraft:lava","type":"generate","res":"fluid:minecraft:lava","per_minute":6000.000000000002,"load":null},{"id":"generate:minecraft:cobblestone","type":"generate","res":"minecraft:cobblestone","per_minute":540.0000000000002,"load":{"machine":"drill","rpm":256.0,"ticks":40,"items_per_op":1,"exact":18.000000000000007,"count":18,"su":18432.0}},{"id":"target:create:andesite_alloy","type":"target","res":"create:andesite_alloy","per_minute":60.0}],"edges":[{"from":"generate:fluid:minecraft:lava","to":"recipe:create:compacting/andesite_from_flint","res":"fluid:minecraft:lava","per_minute":6000.000000000003},{"from":"generate:minecraft:cobblestone","to":"recipe:create:milling/cobblestone","res":"minecraft:cobblestone","per_minute":540.0000000000002,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":216.00000000000009,"funnels":4,"needs_buffer":false}},{"from":"recipe:create:compacting/andesite_from_flint","to":"recipe:create:mixing/andesite_alloy","res":"minecraft:andesite","per_minute":59.99999999999998,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":23.999999999999993,"funnels":1,"needs_buffer":false}},{"from":"recipe:create:milling/cobblestone","to":"recipe:create:compacting/andesite_from_flint","res":"minecraft:gravel","per_minute":60.000000000000036,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":24.000000000000014,"funnels":1,"needs_buffer":false}},{"from":"recipe:create:milling/cobblestone","to":"recipe:create:splashing/gravel","res":"minecraft:gravel","per_minute":480.00000000000017,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":192.00000000000006,"funnels":4,"needs_buffer":false}},{"from":"recipe:create:mixing/andesite_alloy","to":"target:create:andesite_alloy","res":"create:andesite_alloy","per_minute":60.0,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":24.0,"funnels":1,"needs_buffer":false}},{"from":"recipe:create:splashing/gravel","to":"recipe:create:compacting/andesite_from_flint","res":"minecraft:flint","per_minute":120.00000000000009,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":48.000000000000036,"funnels":1,"needs_buffer":false}},{"from":"recipe:create:splashing/gravel","to":"recipe:create:mixing/andesite_alloy","res":"minecraft:iron_nugget","per_minute":59.99999999999998,"transport":{"stack":1,"belt_rpm":256.0,"belts":1,"min_belt_rpm":23.999999999999993,"funnels":1,"needs_buffer":false}}],"total_su":33792.0,"machines":{"drill":18,"fan":4,"millstone":8,"mixer":3,"press":1},"heat":{"burners_heated":0,"burners_superheated":0,"coal_per_min":0.0,"cake_per_min":0.0},"warnings":[],"manual":[]},"recipes":{"create:compacting/andesite_from_flint":{"kind":"compacting","inputs":[{"amount":2.0,"res":"minecraft:flint"},{"amount":1.0,"res":"minecraft:gravel"},{"amount":100.0,"res":"fluid:minecraft:lava"}],"outputs":[{"amount":1.0,"chance":1.0,"res":"minecraft:andesite"}]},"create:milling/cobblestone":{"kind":"milling","inputs":[{"amount":1.0,"res":"minecraft:cobblestone"}],"outputs":[{"amount":1.0,"chance":1.0,"res":"minecraft:gravel"}]},"create:mixing/andesite_alloy":{"kind":"mixing","inputs":[{"amount":1.0,"res":"minecraft:andesite"},{"amount":1.0,"res":"#c:nuggets/iron"}],"outputs":[{"amount":1.0,"chance":1.0,"res":"create:andesite_alloy"}]},"create:splashing/gravel":{"kind":"splashing","inputs":[{"amount":1.0,"res":"minecraft:gravel"}],"outputs":[{"amount":1.0,"chance":0.25,"res":"minecraft:flint"},{"amount":1.0,"chance":0.125,"res":"minecraft:iron_nugget"}]}},"names":{"create:andesite_alloy":"Andesite Alloy","fluid:minecraft:lava":"fluid:minecraft:lava","minecraft:andesite":"Andesite","minecraft:cobblestone":"Cobblestone","minecraft:flint":"Flint","minecraft:gravel":"Gravel","minecraft:iron_nugget":"Iron Nugget"},"power":{"su":33792.0,"boilers":{"levels":3,"engines":3,"tank_blocks":12,"water_mb_per_tick":30,"burners_kindled":3,"burners_seething":2},"sources":[{"id":"water_wheel","su_each":256.0,"count":132},{"id":"large_water_wheel","su_each":512.0,"count":66},{"id":"windmill_bearing","su_each":4096.0,"count":9},{"id":"steam_engine_level","su_each":16384.0,"count":3}]}}/*END*/;
 
@@ -437,9 +445,12 @@ function layout(){
 
 /* ---------- Rendering ---------- */
 const PICK = '<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 10.5 7 5M2.8 3.2c2.6-1.6 5-1.2 7 1-.1-3-1.900-4.700-5-4.500"/></svg>';
+const proc = kind => (KIND[kind] || '').toLowerCase();
+// Machines whose time does not follow RPM. A fan's RPM changes only how far its air reaches.
+const NO_RPM = new Set(['spout', 'item_drain', 'furnace', 'blast_furnace', 'smoker', 'hand']);
 function machineRows(n, kind){
-  const rcBtn = '<button class="rc" data-rc="1">рецепт</button>';
-  const row = (m, xText, extra, btn) => `<div class="mach">${machineIcon(m, 18)}<span class="name">${esc(machineName(m, kind))}</span><span class="x">×${xText}${extra || ''}</span>${btn || ''}</div>`;
+  const rcBtn = '<button class="rc" data-rc="1" aria-label="Рецепт">&#9662;</button>';
+  const row = (m, xText, extra, text, btn) => `<div class="mach">${machineIcon(m, 18)}<span class="name">${esc(MACH[m])}<span class="proc">${esc(text)}</span></span><span class="x">×${xText}${extra || ''}</span>${btn || ''}</div>`;
   const loads = n.loads || [];
   if (loads.length > 1) {
     const groups = new Map();
@@ -447,21 +458,34 @@ function machineRows(n, kind){
       const key = l.machine + '|' + l.count;
       groups.set(key, {m:l.machine, c:l.count, steps:(groups.get(key) || {steps:0}).steps + 1});
     }
-    return [...groups.values()].map((g, i) => row(g.m, g.c, `<small>${g.steps} ${plural(g.steps, 'шаг', 'шага', 'шагов')}</small>`, i === 0 ? rcBtn : '')).join('');
+    return [...groups.values()].map((g, i) => row(g.m, g.c, '', `${proc(kind)}, ${g.steps} ${plural(g.steps, 'шаг', 'шага', 'шагов')}`, i === 0 ? rcBtn : '')).join('');
   }
-  return loads.map(l => row(l.machine, l.count, l.stream_blocks ? `<small>${Math.round(l.stream_blocks)} бл</small>` : '', rcBtn)).join('');
+  return loads.map(l => {
+    const batch = l.machine === 'crushing_wheels' || l.machine === 'fan' ? `, партия ${l.items_per_op}` : '';
+    return row(l.machine, l.count, '', proc(kind) + batch, rcBtn);
+  }).join('');
+}
+// RPM, how full the machines are and stress, the same for recipes and generators.
+function statsRows(loads, ownRpm, extraRight){
+  const l = loads[0];
+  const speed = NO_RPM.has(l.machine) ? '<span class="muted">от RPM не зависит</span>'
+    : `<span class="${ownRpm ? 'own' : ''}">${fmt(l.rpm)} RPM${ownRpm ? ' (свой)' : ''}</span>`;
+  const full = Math.max(...loads.map(x => x.count ? x.exact / x.count : 0));
+  const su = loads.reduce((s, x) => s + x.su, 0);
+  const pct = l.machine === 'hand' ? '' : `<span class="r2 ${full >= .95 ? 'tight' : ''}">загрузка ${Math.ceil(full * 100 - 1e-6)}%</span>`;
+  const blocks = l.stream_blocks ? `<span class="r2">поток ${Math.ceil(l.stream_blocks)} бл.</span>` : '';
+  return `<div class="stats">${speed}${pct || '<span></span>'}<span>${su ? fmt(su) + ' SU' : '<span class="muted">без SU</span>'}</span>${extraRight || blocks || '<span></span>'}</div>`;
 }
 function cardHtml(n){
-  const head = `<div class="head">${itemIcon(n.res, 24)}<div><div class="t">${esc(nameOf(n.res))}</div><div class="r">${rateText(n.res, n.rate)}</div></div></div>`;
+  const head = `<div class="head">${itemIcon(n.res, 24)}<div><div class="t" title="${esc(nameOf(n.res))}">${esc(nameOf(n.res))}</div><div class="r">${rateText(n.res, n.rate)}</div></div></div>`;
   if (n.type === 'recipe') {
     const kind = recipes.get(n.recipe).kind;
-    const su = n.loads.reduce((s, l) => s + l.su, 0);
-    const burn = S.heat && n.burners ? `<b>${n.heat === 'superheated' ? 'перегрев' : 'нагрев'} ×${n.burners}</b>` : '';
-    return head + machineRows(n, kind) + `<div class="su"><span>${fmt(su)} SU</span>${burn}</div>`;
+    const burn = S.heat && n.burners ? `<span class="r2 heat">${n.heat === 'superheated' ? 'перегрев' : 'нагрев'} ×${n.burners}</span>` : '';
+    return head + machineRows(n, kind) + statsRows(n.loads, !!(S.overrides[n.recipe] && S.overrides[n.recipe].rpm), burn);
   }
   if (n.type === 'surplus') return head + `<div class="sub">${n.byproduct ? 'побочный продукт (chance-выход)' : 'остаток производства'}</div>`;
   if (n.type === 'stock') return head + `<div class="sub green">со склада</div>`;
-  const load = n.load ? `<div class="mach">${machineIcon(n.load.machine, 18)}<span class="name">${esc(MACH[n.load.machine])}</span><span class="x">×${n.load.count}</span></div><div class="su"><span>${fmt(n.load.su)} SU</span></div>` : '';
+  const load = n.load ? `<div class="mach">${machineIcon(n.load.machine, 18)}<span class="name">${esc(MACH[n.load.machine])}<span class="proc">на генераторе</span></span><span class="x">×${n.load.count}</span></div>${statsRows([n.load], false)}` : '';
   return head + `<div class="sub green">${PICK}базовый ресурс — снабжение</div>` + load;
 }
 function renderNodes(){
@@ -527,7 +551,7 @@ function renderEdges(){
     placed.push(spot);
     const txt = fmt(e.per_minute) + (unit(e.res) ? ' ' + unit(e.res) : '') + (e.side ? ' (побочн.)' : '');
     const t = e.transport;
-    const extra = t ? [t.stack > 1 ? 'по ' + t.stack : '', t.belts > 1 ? 'лент: ' + t.belts : ''].filter(Boolean).join(', ') : '';
+    const extra = t ? [t.stack > 1 ? 'по ' + t.stack : '', t.belts > 1 ? 'лент: ' + t.belts : '', S.belt ? fmt(t.belt_rpm) + ' RPM' : ''].filter(Boolean).join(', ') : '';
     labels.push(`<div class="elabel" data-edge="${esc(edgeKey(e))}" style="left:${spot[0]}px;top:${spot[1]}px" title="${esc(nameOf(e.res))}">${itemIcon(e.res, 17)}<span class="n">${txt}</span>${extra ? `<span class="n t${t.needs_buffer ? ' warn' : ''}">${extra}</span>` : ''}</div>`);
   }
   $('edges').innerHTML = paths.join('') + arrows.join('');
@@ -535,6 +559,8 @@ function renderEdges(){
 }
 function applyView(){
   $('world').style.transform = `translate(${view.x}px,${view.y}px) scale(${view.k})`;
+  // Far out, details are unreadable anyway: keep what identifies a card and make it bigger.
+  $('world').classList.toggle('far', view.k < .6);
 }
 function fit(){
   const ns = [...G.nodes.values()];
@@ -615,6 +641,13 @@ function nodePanel(n){
     if (n.machine_options.length) h += `<h3>Машина</h3><select id="pMachine">${n.machine_options.map(m => `<option value="${m}"${m === n.loads[0].machine ? ' selected' : ''}>${esc(machineName(m, recipes.get(n.recipe).kind))}</option>`).join('')}</select>`;
     h += `<h3>Свой RPM</h3><input id="pRpm" class="inp" type="number" min="1" max="256" step="any" placeholder="Общий: ${fmt(S.rpm)}" value="${over.rpm ?? ''}">`;
     const l = n.loads[0];
+    if (l.ticks) {
+      const perUnit = l.items_per_op * 1200 / l.ticks;
+      h += `<h3>Скорость</h3><div class="row"><span>${NO_RPM.has(l.machine) ? 'От RPM не зависит' : 'RPM'}</span><span class="v">${NO_RPM.has(l.machine) ? '' : fmt(l.rpm)}</span></div>`;
+      h += `<div class="row"><span>Цикл</span><span class="v">${fmt(l.ticks)} тиков</span></div>`;
+      h += `<div class="row"><span>${l.machine === 'fan' ? 'На блок потока' : 'На машину'}</span><span class="v p">${fmt(perUnit)}/мин</span></div>`;
+      if (l.machine === 'fan') h += `<div class="note">RPM вентилятора меняет только дальность потока, время обработки от него не зависит.</div>`;
+    }
     if (n.loads.length === 1 && (l.machine === 'crushing_wheels' || l.machine === 'fan')) {
       const cur = over.batch || 1;
       h += `<h3>Партия</h3><div class="seg" id="pBatch">${[1, 4, 16, 64].map(b => `<button data-v="${b}"${b === cur ? ' class="on"' : ''}>${b}</button>`).join('')}</div>`;
