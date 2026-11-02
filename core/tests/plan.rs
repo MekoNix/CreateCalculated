@@ -1,6 +1,6 @@
 //! Planner tests on a small hand-written recipe set.
 
-use createcalc_core::machines::Machine;
+use createcalc_core::machines::{Funnel, Machine};
 use createcalc_core::model::{AssemblyStep, Bundle, Catalog, Heat, Output, Recipe, RecipeKind, Stack};
 use createcalc_core::plan::{consumers, plan, Branch, NodeKind, NodeOverride, Plan, PlanError, PlanRequest, Target};
 use createcalc_core::power::plan_power;
@@ -296,8 +296,8 @@ fn transport_counts_belts_and_funnels() {
     let mut req = request("sheet", 700.0);
     let p = plan(&catalog(), &req).unwrap();
     let t = edge(&p, "recipe:cheap_sheet", "sheet").transport.clone().unwrap();
-    // 256 RPM carries 640 stacks a minute, a funnel moves 150.
-    assert_eq!((t.stack, t.belts, t.funnels), (1, 2, 5));
+    // 256 RPM carries 640 stacks a minute, a funnel moves one every 9 ticks, so 133.
+    assert_eq!((t.stack, t.belts, t.funnels), (1, 2, 6));
     close(t.min_belt_rpm, 280.0);
     assert!(!t.needs_buffer);
 
@@ -403,6 +403,94 @@ fn build_list_includes_transport_and_buffers() {
     assert_eq!(built(&p, "minecraft:chest"), 0);
     req.stack_sizes.insert("sheet".into(), 16);
     assert_eq!(built(&plan(&cat, &req).unwrap(), "minecraft:chest"), 1);
+}
+
+const ANDESITE: &str = "create:andesite_funnel";
+const BRASS: &str = "create:brass_funnel";
+
+#[test]
+fn funnel_choice_goes_to_the_build_list_and_defaults_to_andesite() {
+    let cat = catalog();
+    let mut req = request("sheet", 700.0);
+    assert_eq!(req.funnel, Funnel::Andesite);
+    let andesite = plan(&cat, &req).unwrap();
+    let count = built(&andesite, ANDESITE);
+    assert!(count > 0);
+    assert_eq!(built(&andesite, BRASS), 0);
+
+    req.funnel = Funnel::Brass;
+    let brass = plan(&cat, &req).unwrap();
+    assert_eq!(built(&brass, BRASS), count);
+    assert_eq!(built(&brass, ANDESITE), 0);
+}
+
+#[test]
+fn funnel_choice_alone_changes_nothing_but_the_funnel_item() {
+    // Both funnels run on the same timer, so at a stack of 1 only the block differs.
+    let cat = catalog();
+    let mut req = targets(&[("mechanism", 60.0), ("brass", 300.0)]);
+    let andesite = plan(&cat, &req).unwrap();
+    req.funnel = Funnel::Brass;
+    let brass = plan(&cat, &req).unwrap();
+    close(andesite.total_su, brass.total_su);
+    assert_eq!(andesite.machines, brass.machines);
+    assert_eq!(andesite.edges.len(), brass.edges.len());
+    for (a, b) in andesite.edges.iter().zip(&brass.edges) {
+        let (Some(a), Some(b)) = (&a.transport, &b.transport) else { continue };
+        assert_eq!((a.stack, a.belts, a.funnels, a.needs_buffer), (b.stack, b.belts, b.funnels, b.needs_buffer));
+        assert_eq!((a.funnel, b.funnel), (Funnel::Andesite, Funnel::Brass));
+    }
+}
+
+#[test]
+fn a_stack_above_one_takes_brass_funnels_even_when_andesite_is_chosen() {
+    // An andesite funnel moves one item per transfer, so it cannot put a stack on a belt.
+    let cat = catalog();
+    let mut req = request("sheet", 700.0);
+    req.stack_sizes.insert("sheet".into(), 16);
+    let p = plan(&cat, &req).unwrap();
+    let sheets = edge(&p, "recipe:cheap_sheet", "sheet").transport.clone().unwrap();
+    assert_eq!((sheets.stack, sheets.funnel), (16, Funnel::Brass));
+    // Flows still in single items keep the funnel that was chosen.
+    let iron = edge(&p, "recipe:smelt_crushed", "iron").transport.clone().unwrap();
+    assert_eq!((iron.stack, iron.funnel), (1, Funnel::Andesite));
+    // Each funnel lands in the list under its own item, and none goes missing.
+    let total = |kind: Funnel| -> u32 { p.edges.iter().filter(|e| !e.to.starts_with("surplus:")).filter_map(|e| e.transport.as_ref()).filter(|t| t.funnel == kind).map(|t| t.funnels).sum() };
+    assert_eq!(built(&p, BRASS), total(Funnel::Brass));
+    assert_eq!(built(&p, ANDESITE), total(Funnel::Andesite));
+    assert_eq!(built(&p, BRASS), sheets.funnels);
+    assert!(built(&p, ANDESITE) > 0);
+    // The counts are the same as with brass chosen outright.
+    req.funnel = Funnel::Brass;
+    let all_brass = plan(&cat, &req).unwrap();
+    assert_eq!(built(&all_brass, BRASS), built(&p, BRASS) + built(&p, ANDESITE));
+    assert_eq!(built(&all_brass, ANDESITE), 0);
+}
+
+#[test]
+fn a_batch_or_a_whole_scheme_stack_takes_brass_too() {
+    let cat = catalog();
+    // A machine working in batches sets the stack it receives.
+    let mut req = request("iron", 60.0);
+    req.batch = 16;
+    let p = plan(&cat, &req).unwrap();
+    assert_eq!(edge(&p, "gather:raw_iron", "raw_iron").transport.as_ref().unwrap().funnel, Funnel::Brass);
+    // The stack for the whole scheme leaves nothing andesite can load.
+    let mut req = request("sheet", 700.0);
+    req.stack = 4;
+    let p = plan(&cat, &req).unwrap();
+    assert!(built(&p, BRASS) > 0);
+    assert_eq!(built(&p, ANDESITE), 0);
+}
+
+#[test]
+fn funnel_field_reads_from_json_and_may_be_left_out() {
+    let body = |extra: &str| format!(r#"{{"targets":[{{"item":"sheet","per_minute":60}}]{extra}}}"#);
+    let read = |extra: &str| serde_json::from_str::<PlanRequest>(&body(extra));
+    assert_eq!(read("").unwrap().funnel, Funnel::Andesite);
+    assert_eq!(read(r#","funnel":"andesite""#).unwrap().funnel, Funnel::Andesite);
+    assert_eq!(read(r#","funnel":"brass""#).unwrap().funnel, Funnel::Brass);
+    assert!(read(r#","funnel":"copper""#).is_err());
 }
 
 fn branch_catalog() -> Catalog {
