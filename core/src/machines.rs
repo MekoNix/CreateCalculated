@@ -218,9 +218,10 @@ pub fn drill_ticks(rpm: f64, hardness: f32) -> u32 {
     }
 }
 
-/// Lava spreads one block per 30 ticks in the overworld, so a generator refills that slowly.
-/// This depends on the layout and is an estimate, not a value from Create.
-pub const GENERATOR_REFILL_TICKS: u32 = 30;
+/// Measured in the game: one drill on a cobblestone generator at 256 RPM made 109 blocks in
+/// 1200 ticks, 11 ticks per block, of which 10 are drilling. The block comes back at once.
+/// Other generator layouts may differ.
+pub const GENERATOR_REFILL_TICKS: u32 = 1;
 
 /// Drills needed on stone generators. Block hardness comes from the game: cobblestone 2, stone 1.5.
 pub fn size_generator(res: &str, rpm: f64, per_min: f64, cfg: &Config) -> Load {

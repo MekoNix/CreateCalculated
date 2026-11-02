@@ -66,11 +66,11 @@ fn drill_breaks_a_block_in_ten_hits() {
     // At 64 RPM a hit waits (int)(2 / 0.64) = 3 ticks: 10 hits and 9 waits.
     assert_eq!(drill_ticks(64.0, 2.0), 37);
     let cfg = Config::default();
-    // 10 ticks of drilling and 30 of refilling: 30 blocks a minute per drill.
-    let one = size_generator("minecraft:cobblestone", 256.0, 30.0, &cfg);
+    // 10 ticks of drilling and 1 of refilling, as measured: 109 blocks a minute per drill.
+    let one = size_generator("minecraft:cobblestone", 256.0, 109.0, &cfg);
     assert_eq!(one.count, 1);
     assert_eq!(one.su, 4.0 * 256.0);
-    assert_eq!(size_generator("minecraft:cobblestone", 256.0, 31.0, &cfg).count, 2);
+    assert_eq!(size_generator("minecraft:cobblestone", 256.0, 110.0, &cfg).count, 2);
 }
 
 #[test]
