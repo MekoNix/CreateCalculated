@@ -1,0 +1,13 @@
+[package]
+name = "createcalc-core"
+version.workspace = true
+edition.workspace = true
+description = "Production planner for the Minecraft mod Create"
+
+[lib]
+name = "createcalc_core"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+toml = "0.8"
