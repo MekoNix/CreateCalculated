@@ -20,6 +20,8 @@ fn mixer_cycle() {
     assert_eq!(mixer_ticks(256.0, 0), MIXER_MIN_TICKS);
     // 512 / 93 = 5, log2 floors to 2: 2 * 15 + 1 + 1 = 32. The game measured 32.4.
     assert_eq!(mixer_ticks(93.0, 0), 32);
+    // 512 / 128 = 4, log2 = 2: the same 32, also as measured.
+    assert_eq!(mixer_ticks(128.0, 0), 32);
     // log2(8) = 3: 3 * 15 + 1 + 1 = 47.
     assert_eq!(mixer_ticks(64.0, 0), 47);
 }

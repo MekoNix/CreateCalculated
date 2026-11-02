@@ -128,7 +128,7 @@ pub const MIXER_MIN_TICKS: u32 = 27;
 
 /// `MechanicalMixerBlockEntity.tick` in steady work: while the basin holds ingredients and the
 /// output is free, `continueWithPreviousRecipe` keeps the head down, so each recipe costs one
-/// tick to set the timer plus the timer. Measured at 93 RPM: 32.4 ticks, the formula gives 32.
+/// tick to set the timer plus the timer. Measured at 93 and 128 RPM: 32.4 ticks, the formula gives 32.
 /// `duration` of 0 means the default mixing speed.
 pub fn mixer_ticks(rpm: f64, duration: u32) -> u32 {
     let recipe_speed = if duration == 0 { 1.0 } else { duration as f32 / 100.0 };
