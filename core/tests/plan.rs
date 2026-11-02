@@ -360,3 +360,47 @@ fn producers_list_main_output_first() {
     assert_eq!(ids, ["cheap_sheet", "dear_sheet"]);
     assert!(createcalc_core::plan::producers(&cat, "zinc", &cfg).is_empty());
 }
+
+fn built(p: &Plan, item: &str) -> u32 {
+    p.build.iter().find(|b| b.item == item).map_or(0, |b| b.count)
+}
+
+#[test]
+fn build_list_counts_every_block() {
+    let cat = catalog();
+    // One mixer with a basin and a burner, because brass needs heat.
+    let p = plan(&cat, &request("brass", 60.0)).unwrap();
+    assert_eq!(built(&p, "create:mechanical_mixer"), 1);
+    assert_eq!(built(&p, "create:basin"), 1);
+    assert_eq!(built(&p, "create:blaze_burner"), 1);
+    // Crushing wheels come in pairs.
+    let p = plan(&cat, &request("crushed_iron", 600.0)).unwrap();
+    assert_eq!(built(&p, "create:crushing_wheel"), 2 * p.machines["crushing_wheels"]);
+    // A press needs a basin only when compacting: pressing on a belt does not.
+    let p = plan(&cat, &request("sheet", 60.0)).unwrap();
+    assert_eq!(built(&p, "create:mechanical_press"), 1);
+    assert_eq!(built(&p, "create:basin"), 0);
+    // A 3x3 grid on crafters takes nine of them; pressed instead, it takes a press and a basin.
+    let mut req = request("diamond_block", 60.0);
+    let p = plan(&cat, &req).unwrap();
+    assert_eq!((built(&p, "create:mechanical_press"), built(&p, "create:basin")), (1, 1));
+    req.overrides.insert("block".into(), NodeOverride { machine: Some(Machine::MechanicalCrafter), ..Default::default() });
+    let p = plan(&cat, &req).unwrap();
+    assert_eq!(built(&p, "create:mechanical_crafter"), 9 * p.machines["mechanical_crafter"]);
+}
+
+#[test]
+fn build_list_includes_transport_and_buffers() {
+    let cat = catalog();
+    let mut req = request("sheet", 700.0);
+    let p = plan(&cat, &req).unwrap();
+    let total = |f: fn(&createcalc_core::machines::Transport) -> u32, p: &Plan| -> u32 {
+        // Leftovers are not transported anywhere planned.
+        p.edges.iter().filter(|e| !e.to.starts_with("surplus:")).filter_map(|e| e.transport.as_ref()).map(f).sum()
+    };
+    assert_eq!(built(&p, "create:belt_connector"), total(|t| t.belts, &p));
+    assert_eq!(built(&p, "create:andesite_funnel"), total(|t| t.funnels, &p));
+    assert_eq!(built(&p, "minecraft:chest"), 0);
+    req.stack_sizes.insert("sheet".into(), 16);
+    assert_eq!(built(&plan(&cat, &req).unwrap(), "minecraft:chest"), 1);
+}

@@ -178,6 +178,14 @@ pub struct Plan {
     pub warnings: Vec<String>,
     /// Full automation only: resources that still have to be dug out or found by hand.
     pub manual: Vec<ResId>,
+    /// Everything to craft or place to build this scheme. Shafts, pipes and power are not included.
+    pub build: Vec<BuildItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BuildItem {
+    pub item: ResId,
+    pub count: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -641,6 +649,7 @@ fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, stock: &HashSet<
     let mut edges = collapse_conversions(raw_edges);
     name_recipe_nodes(cat, req, &mut nodes, &edges);
     add_transport(cat, req, &nodes, &mut edges);
+    let build = build_list(cat, &nodes, &edges);
 
     let heat = req.include_heat.then(|| HeatStats {
         burners_heated: heated,
@@ -648,7 +657,7 @@ fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, stock: &HashSet<
         coal_per_min: heated as f64 * 1200.0 / COAL_BURN_TICKS,
         cake_per_min: superheated as f64 * 1200.0 / CAKE_BURN_TICKS,
     });
-    Ok(Plan { nodes, edges, total_su, machines: machine_counts, heat, warnings, manual })
+    Ok(Plan { nodes, edges, total_su, machines: machine_counts, heat, warnings, manual, build })
 }
 
 /// Works out what each recipe is there for, and which other recipes could do it.
@@ -668,6 +677,63 @@ fn name_recipe_nodes(cat: &Catalog, req: &PlanRequest, nodes: &mut [Node], edges
             .map(|r| r.id.clone())
             .collect();
     }
+}
+
+/// Items for one machine of a recipe. Basin work needs a basin under the machine.
+fn machine_items(machine: Machine, kind: RecipeKind, cells: u32) -> Vec<(&'static str, u32)> {
+    let basin = ("create:basin", 1);
+    match machine {
+        Machine::Press if kind == RecipeKind::Pressing => vec![("create:mechanical_press", 1)],
+        Machine::Press => vec![("create:mechanical_press", 1), basin],
+        Machine::Mixer => vec![("create:mechanical_mixer", 1), basin],
+        Machine::Millstone => vec![("create:millstone", 1)],
+        Machine::CrushingWheels => vec![("create:crushing_wheel", 2)],
+        Machine::Saw => vec![("create:mechanical_saw", 1)],
+        Machine::Deployer => vec![("create:deployer", 1)],
+        Machine::Spout => vec![("create:spout", 1)],
+        Machine::ItemDrain => vec![("create:item_drain", 1)],
+        Machine::MechanicalCrafter => vec![("create:mechanical_crafter", cells.max(1))],
+        Machine::Fan => vec![("create:encased_fan", 1)],
+        Machine::Drill => vec![("create:mechanical_drill", 1)],
+        Machine::Furnace => vec![("minecraft:furnace", 1)],
+        Machine::BlastFurnace => vec![("minecraft:blast_furnace", 1)],
+        Machine::Smoker => vec![("minecraft:smoker", 1)],
+        Machine::Hand => vec![],
+    }
+}
+
+/// Totals what has to be built. Belts are counted as separate lines, their length is up to the layout.
+fn build_list(cat: &Catalog, nodes: &[Node], edges: &[Edge]) -> Vec<BuildItem> {
+    let mut items: BTreeMap<&str, u32> = BTreeMap::new();
+    for node in nodes {
+        match &node.kind {
+            NodeKind::Recipe { recipe, loads, burners, .. } => {
+                let Some(r) = cat.recipe(recipe) else { continue };
+                for (i, load) in loads.iter().enumerate() {
+                    let kind = r.steps.get(i).map_or(r.kind, |s| s.kind);
+                    for (item, each) in machine_items(load.machine, kind, r.cells) {
+                        *items.entry(item).or_default() += each * load.count;
+                    }
+                }
+                if *burners > 0 {
+                    *items.entry("create:blaze_burner").or_default() += burners;
+                }
+            }
+            NodeKind::Generate { load: Some(load), .. } => {
+                *items.entry("create:mechanical_drill").or_default() += load.count;
+            }
+            _ => {}
+        }
+    }
+    for e in edges.iter().filter(|e| !e.to.starts_with("surplus:")) {
+        let Some(t) = &e.transport else { continue };
+        *items.entry("create:belt_connector").or_default() += t.belts;
+        *items.entry("create:andesite_funnel").or_default() += t.funnels;
+        if t.needs_buffer {
+            *items.entry("minecraft:chest").or_default() += 1;
+        }
+    }
+    items.into_iter().map(|(item, count)| BuildItem { item: item.to_string(), count }).collect()
 }
 
 fn add_transport(cat: &Catalog, req: &PlanRequest, nodes: &[Node], edges: &mut [Edge]) {
