@@ -827,7 +827,7 @@ async function recipeList(kind, item){
   }
   return recipeLists.get(key);
 }
-function openItem(res, tab){ panel = {kind:'item', res, tab, add:null}; renderPanel(); }
+function openItem(res, tab){ panel = {kind:'item', res, tab}; renderPanel(); }
 const leftover = res => plan.nodes.filter(n => n.type === 'surplus' && n.res === res).reduce((s, n) => s + n.per_minute, 0);
 // A tag has no single item to open, so it stays a label.
 const realItem = res => res;
@@ -842,16 +842,14 @@ function recipeRow(r, tab, res){
   const ins = r.inputs.map(s => chip(s.res, s.amount)).join('');
   const search = (r.id + ' ' + r.inputs.concat(r.outputs).map(x => nameOf(x.res)).join(' ')).toLowerCase();
   const mine = plan.nodes.some(n => n.recipe === r.id);
-  let act = '';
+  let act = '', form = '';
   if (tab === 'made') act = mine ? '<span class="d">уже в схеме</span>' : `<button class="btn sm" data-use="${esc(r.id)}">Использовать</button>`;
-  else if (mine) act = '<span class="d">уже в схеме</span>';
-  else act = `<button class="btn sm" data-add="${esc(r.id)}">В схему</button>`;
-  let form = '';
-  if (tab === 'uses' && panel.add === r.id) {
+  else {
+    if (mine) act = '<span class="d">уже в схеме</span>';
     const left = leftover(res);
-    form = `<div class="addf"><input id="iPer" class="inp" type="number" min="0.01" step="any" placeholder="${esc(nameOf(mainRes(r)))} в минуту"><button class="btn sm" id="iAdd">Добавить</button><button class="btn sm" id="iAll"${left > 1e-6 ? '' : ' disabled'} title="${left > 1e-6 ? 'В остатке ' + fmt(left) + '/мин' : 'Остатка этого предмета нет'}">Весь остаток</button></div>`;
+    form = `<div class="addf" data-recipe="${esc(r.id)}"><input class="inp iPer" type="number" min="0.01" step="any" placeholder="${isFluid(mainRes(r)) ? 'мБ' : 'шт'} в минуту" aria-label="Количество в минуту"><button class="btn sm iAdd">Добавить</button><button class="btn sm iAll"${left > 1e-6 ? '' : ' disabled'} title="${left > 1e-6 ? 'В остатке ' + fmt(left) + '/мин' : 'Остатка этого предмета нет'}">Весь остаток</button></div>`;
   }
-  const others = r.outputs.length > 1 ? ` <span class="d">+${r.outputs.length - 1}</span>` : '';
+    const others = r.outputs.length > 1 ? ` <span class="d">+${r.outputs.length - 1}</span>` : '';
   return `<div class="rcp" data-search="${esc(search)}"><div class="rl"><span class="rt"><span class="rn">${esc(nameOf(mainRes(r)))}</span>${others}<span class="d rk">${esc(KIND[r.kind] || r.kind)}</span></span>${act}</div><div class="rf">${ins}<span class="ar">&rarr;</span>${outs}</div>${form}</div>`;
 }
 async function renderItemPanel(){
@@ -862,7 +860,7 @@ async function renderItemPanel(){
     <div class="seg wide" id="iTabs">${tab('made')}${tab('uses')}</div>
     <input id="iFilter" class="inp wide" placeholder="Поиск по рецептам" autocomplete="off" spellcheck="false">
     <div id="iList"><div class="note">Загрузка...</div></div>`;
-  $('iTabs').addEventListener('click', e => { const v = e.target.dataset.t; if (v) { panel.tab = v; panel.add = null; renderItemPanel(); } });
+  $('iTabs').addEventListener('click', e => { const v = e.target.dataset.t; if (v) { panel.tab = v; renderItemPanel(); } });
   let timer;
   $('iItem').addEventListener('input', e => {
     clearTimeout(timer);
@@ -888,20 +886,28 @@ async function renderItemPanel(){
   const left = leftover(p.res);
   const head = left > 1e-6 ? `<div class="note warn">В остатке ${fmt(left)}/мин: можно пустить в новую ветку.</div>` : '';
   $('iList').innerHTML = head + (list.map(r => recipeRow(r, p.tab, p.res)).join('') || `<div class="note">${empty}</div>`);
+  $('iList').addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || !e.target.classList.contains('iPer')) return;
+    const v = parseFloat(e.target.value);
+    if (v > 0) addBranch(e.target.closest('.addf').dataset.recipe, v);
+  });
   $('iList').addEventListener('click', e => {
     const go = e.target.closest('[data-res]');
     if (go) { openItem(go.dataset.res, panel.tab); return; }
     const use = e.target.closest('[data-use]');
     if (use) { confirmChange(() => { S.choice[p.res] = use.dataset.use; S.stock = S.stock.filter(r => r !== p.res); }); return; }
-    const add = e.target.closest('[data-add]');
-    if (add) { panel.add = panel.add === add.dataset.add ? null : add.dataset.add; renderItemPanel(); return; }
-    if (e.target.id === 'iAll') { addBranch(null); return; }
-    if (e.target.id === 'iAdd') { const v = parseFloat($('iPer').value); if (v > 0) addBranch(v); }
+    const form = e.target.closest('.addf');
+    if (!form) return;
+    if (e.target.classList.contains('iAll')) { addBranch(form.dataset.recipe, null); return; }
+    if (e.target.classList.contains('iAdd')) {
+      const input = form.querySelector('.iPer'), v = parseFloat(input.value);
+      if (v > 0) addBranch(form.dataset.recipe, v); else input.focus();
+    }
   });
 }
-function addBranch(perMinute){
-  const branch = {recipe:panel.add, input:panel.res, per_minute:perMinute};
-  confirmChange(() => { S.branches = [...S.branches, branch]; panel.add = null; });
+function addBranch(recipe, perMinute){
+  const branch = {recipe, input:panel.res, per_minute:perMinute};
+  confirmChange(() => { S.branches = [...S.branches, branch]; });
 }
 // What a change would do to the raw resources and the stress, compared with the current plan.
 function planDiff(before, after){
@@ -938,8 +944,8 @@ function askConfirm(d){
 // Applies a change to the scheme, asking first when it would alter the resources.
 async function confirmChange(apply){
   const saved = {branches:[...S.branches], choice:{...S.choice}, stock:[...S.stock]};
-  const addSaved = panel && panel.add;
-  const undo = () => { Object.assign(S, saved); if (panel && panel.kind === 'item') panel.add = addSaved; renderPanel(); };
+  // The recipe browser keeps what was typed, other panels redraw to undo a changed selection.
+  const undo = () => { Object.assign(S, saved); if (!panel || panel.kind !== 'item') renderPanel(); };
   apply();
   if (!S.ask) return replan();
   let preview;
