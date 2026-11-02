@@ -122,32 +122,20 @@ pub fn press_ticks(rpm: f64) -> u32 {
     }
 }
 
-/// `MechanicalMixerBlockEntity.tick`. `duration` of 0 means the default mixing speed.
+/// Fastest mixer cycle seen in the game: 26.4 ticks per item at 256 RPM with a full basin and
+/// the head never lifting, where the code gives 17. The cause is not known yet.
+pub const MIXER_MIN_TICKS: u32 = 27;
+
+/// `MechanicalMixerBlockEntity.tick` in steady work: while the basin holds ingredients and the
+/// output is free, `continueWithPreviousRecipe` keeps the head down, so each recipe costs one
+/// tick to set the timer plus the timer. Measured at 93 RPM: 32.4 ticks, the formula gives 32.
+/// `duration` of 0 means the default mixing speed.
 pub fn mixer_ticks(rpm: f64, duration: u32) -> u32 {
     let recipe_speed = if duration == 0 { 1.0 } else { duration as f32 / 100.0 };
     let quotient = (512.0 / rpm.abs() as f32) as u32;
     let log = if quotient == 0 { -1 } else { 31 - quotient.leading_zeros() as i64 };
     let processing = (log * (recipe_speed * 15.0).ceil() as i64 + 1).max(1);
-    let (mut running, mut left, mut ticks) = (0, -1i64, 0u32);
-    loop {
-        ticks += 1;
-        if running >= 40 {
-            return ticks;
-        }
-        if running == 20 {
-            if left < 0 {
-                left = processing;
-            } else {
-                left -= 1;
-                if left == 0 {
-                    running += 1;
-                    left = -1;
-                }
-            }
-        } else {
-            running += 1;
-        }
-    }
+    (processing as u32 + 1).max(MIXER_MIN_TICKS)
 }
 
 /// `MillstoneBlockEntity.tick`.

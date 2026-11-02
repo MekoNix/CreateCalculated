@@ -170,9 +170,9 @@ fn heat_statistic_can_be_turned_off() {
     let cat = catalog();
     let p = plan(&cat, &request("brass", 60.0)).unwrap();
     let heat = p.heat.clone().unwrap();
-    // 30 runs a minute at 57 ticks: 1.425 mixers, so 2 mixers and 2 burners.
-    assert_eq!(heat.burners_heated, 2);
-    close(heat.coal_per_min, 1.5);
+    // 30 runs a minute at 27 ticks: 0.675 of a mixer, so 1 mixer and 1 burner.
+    assert_eq!(heat.burners_heated, 1);
+    close(heat.coal_per_min, 0.75);
     let mut req = request("brass", 60.0);
     req.include_heat = false;
     assert!(plan(&cat, &req).unwrap().heat.is_none());
@@ -185,9 +185,9 @@ fn per_recipe_rpm_override() {
     let mut req = request("brass", 60.0);
     req.overrides.insert("brass".into(), NodeOverride { rpm: Some(64.0), ..Default::default() });
     let slow = plan(&cat, &req).unwrap();
-    // 2 mixers at 256 RPM: 4 * 2 * 256 SU. 30 runs at 87 ticks = 2.175, so 3 at 64 RPM.
-    close(base.total_su, 2048.0);
-    close(slow.total_su, 3.0 * 4.0 * 64.0);
+    // 1 mixer at 256 RPM: 4 * 256 SU. 30 runs at 47 ticks = 1.175, so 2 at 64 RPM.
+    close(base.total_su, 1024.0);
+    close(slow.total_su, 2.0 * 4.0 * 64.0);
 }
 
 #[test]
