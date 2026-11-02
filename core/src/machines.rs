@@ -1,5 +1,7 @@
 //! Machine timing, reproduced tick by tick from Create 6.0.10 because the game
 //! truncates to integers, so speed is not proportional to RPM.
+//! This is working time only: ticks a machine spends starting the next operation are left out,
+//! so real output can be slightly lower. The stone generator is the one exception.
 //! See docs/formulas.md for the source of each function.
 
 use crate::config::Config;
@@ -101,9 +103,7 @@ pub fn step_machine(kind: RecipeKind) -> Machine {
     }
 }
 
-/// `PressingBehaviour.getRunningTickSpeed` and the cycle in `PressingBehaviour.tick`, plus
-/// one tick to start the next cycle. Measured in the game on a belt at 256 RPM: 109 items
-/// in 1200 ticks, 11 ticks per item, where the code alone gives 10.
+/// `PressingBehaviour.getRunningTickSpeed` and the cycle in `PressingBehaviour.tick`.
 pub fn press_ticks(rpm: f64) -> u32 {
     const CYCLE: i64 = 240;
     let t = (rpm.abs() as f32 / 512.0).clamp(0.0, 1.0);
@@ -112,7 +112,7 @@ pub fn press_ticks(rpm: f64) -> u32 {
     loop {
         ticks += 1;
         if running > CYCLE {
-            return ticks + 1;
+            return ticks;
         }
         let prev = running;
         running += speed;
@@ -123,21 +123,20 @@ pub fn press_ticks(rpm: f64) -> u32 {
 }
 
 /// `MechanicalMixerBlockEntity.tick` in steady work: while the basin holds ingredients and the
-/// output is free, `continueWithPreviousRecipe` keeps the head down, so each recipe costs one
-/// tick to set the timer plus the timer. Measured: 32.4 ticks at 93 and 128 RPM against 32, and 70 items a minute at 256 RPM against 17 ticks.
+/// output is free, `continueWithPreviousRecipe` keeps the head down, so a recipe takes just the timer.
 /// `duration` of 0 means the default mixing speed.
 pub fn mixer_ticks(rpm: f64, duration: u32) -> u32 {
     let recipe_speed = if duration == 0 { 1.0 } else { duration as f32 / 100.0 };
     let quotient = (512.0 / rpm.abs() as f32) as u32;
     let log = if quotient == 0 { -1 } else { 31 - quotient.leading_zeros() as i64 };
     let processing = (log * (recipe_speed * 15.0).ceil() as i64 + 1).max(1);
-    processing as u32 + 1
+    processing as u32
 }
 
 /// `MillstoneBlockEntity.tick`.
 pub fn millstone_ticks(rpm: f64, duration: u32) -> u32 {
     let speed = ((rpm.abs() as f32 / 16.0) as i64).clamp(1, 512);
-    (duration as i64 / speed + i64::from(duration as i64 % speed != 0)) as u32 + 1
+    (duration as i64 / speed + i64::from(duration as i64 % speed != 0)) as u32
 }
 
 /// `SawBlockEntity.tick`. The recipe applies below 5 ticks left, then 20 more ticks to eject.
@@ -164,10 +163,8 @@ pub fn crushing_ticks(rpm: f64, duration: u32, stack: u32) -> u32 {
         let divisor = if applied { 1.0 } else { log };
         remaining -= (speed / divisor).clamp(0.25, 20.0);
         ticks += 1;
-        // The tick that applies the recipe returns early, so output waits for the next one.
         if remaining < 20.0 && !applied {
             applied = true;
-            continue;
         }
         if remaining <= 0.0 {
             return ticks;

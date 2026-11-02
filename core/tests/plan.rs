@@ -170,7 +170,7 @@ fn heat_statistic_can_be_turned_off() {
     let cat = catalog();
     let p = plan(&cat, &request("brass", 60.0)).unwrap();
     let heat = p.heat.clone().unwrap();
-    // 30 runs a minute at 17 ticks: 0.425 of a mixer, so 1 mixer and 1 burner.
+    // 30 runs a minute at 16 ticks: 0.4 of a mixer, so 1 mixer and 1 burner.
     assert_eq!(heat.burners_heated, 1);
     close(heat.coal_per_min, 0.75);
     let mut req = request("brass", 60.0);
@@ -185,7 +185,7 @@ fn per_recipe_rpm_override() {
     let mut req = request("brass", 60.0);
     req.overrides.insert("brass".into(), NodeOverride { rpm: Some(64.0), ..Default::default() });
     let slow = plan(&cat, &req).unwrap();
-    // 1 mixer at 256 RPM: 4 * 256 SU. 30 runs at 47 ticks = 1.175, so 2 at 64 RPM.
+    // 1 mixer at 256 RPM: 4 * 256 SU. 30 runs at 46 ticks = 1.15, so 2 at 64 RPM.
     close(base.total_su, 1024.0);
     close(slow.total_su, 2.0 * 4.0 * 64.0);
 }
@@ -197,7 +197,7 @@ fn batch_changes_crusher_count() {
     let single = plan(&cat, &req).unwrap();
     req.batch = 64;
     let batched = plan(&cat, &req).unwrap();
-    assert_eq!(single.machines["crushing_wheels"], 11); // 57 a minute each
+    assert_eq!(single.machines["crushing_wheels"], 10); // 60 a minute each
     assert_eq!(batched.machines["crushing_wheels"], 1); // 680 a minute
 }
 

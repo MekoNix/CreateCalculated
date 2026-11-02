@@ -6,30 +6,26 @@ use createcalc_core::model::RecipeKind;
 
 #[test]
 fn press_cycle() {
-    // speed (int)lerp(0.5, 1, 60) = 30: 4 ticks to 120, 5 to pass 240, 1 to finish, 1 to restart.
-    // 11 matches the measurement in the game.
-    assert_eq!(press_ticks(256.0), 11);
-    // speed (int)lerp(0.125, 1, 60) = 8: 15 ticks to 120, 16 to pass 240, 1 to finish, 1 to restart.
-    assert_eq!(press_ticks(64.0), 33);
+    // speed (int)lerp(0.5, 1, 60) = 30: 4 ticks to 120, 5 to pass 240, 1 to finish.
+    assert_eq!(press_ticks(256.0), 10);
+    // speed (int)lerp(0.125, 1, 60) = 8: 15 ticks to 120, 16 to pass 240, 1 to finish.
+    assert_eq!(press_ticks(64.0), 32);
 }
 
 #[test]
 fn mixer_cycle() {
-    // The head stays down in steady work, so a recipe costs the timer plus one tick to set it.
-    // 16 + 1 at 256 RPM. The game measured 70 items a minute, which is 17 ticks.
-    assert_eq!(mixer_ticks(256.0, 0), 17);
-    // 512 / 93 = 5, log2 floors to 2: 2 * 15 + 1 + 1 = 32. The game measured 32.4.
-    assert_eq!(mixer_ticks(93.0, 0), 32);
-    // 512 / 128 = 4, log2 = 2: the same 32, also as measured.
-    assert_eq!(mixer_ticks(128.0, 0), 32);
-    // log2(8) = 3: 3 * 15 + 1 + 1 = 47.
-    assert_eq!(mixer_ticks(64.0, 0), 47);
+    // The head stays down in steady work, so a recipe takes the timer: log2 * 15 + 1.
+    assert_eq!(mixer_ticks(256.0, 0), 16);
+    // 512 / 128 = 4 and 512 / 93 floors to 5, both give log2 = 2.
+    assert_eq!(mixer_ticks(128.0, 0), 31);
+    assert_eq!(mixer_ticks(93.0, 0), 31);
+    assert_eq!(mixer_ticks(64.0, 0), 46);
 }
 
 #[test]
 fn millstone_cycle() {
-    assert_eq!(millstone_ticks(256.0, 100), 8); // 100 / 16 rounds up to 7, plus the reset tick
-    assert_eq!(millstone_ticks(8.0, 50), 51); // below 16 RPM the speed stays 1
+    assert_eq!(millstone_ticks(256.0, 100), 7); // 100 / 16 rounds up to 7
+    assert_eq!(millstone_ticks(8.0, 50), 50); // below 16 RPM the speed stays 1
 }
 
 #[test]
@@ -41,9 +37,8 @@ fn saw_cycle() {
 #[test]
 fn crushing_depends_on_stack() {
     // A single item always loses 20 per tick regardless of RPM.
-    // Tick 20 reaches 0 and applies the recipe, tick 21 outputs.
-    assert_eq!(crushing_ticks(256.0, 400, 1), 21);
-    assert_eq!(crushing_ticks(64.0, 400, 1), 21);
+    assert_eq!(crushing_ticks(256.0, 400, 1), 20);
+    assert_eq!(crushing_ticks(64.0, 400, 1), 20);
     // 16 items at 256 RPM: 20.48 / 4 = 5.12 per tick until below 20.
     assert_eq!(crushing_ticks(256.0, 400, 16), 76);
     assert_eq!(crushing_ticks(256.0, 400, 64), 113);
@@ -90,10 +85,10 @@ fn fan_time_steps_every_16_items() {
 #[test]
 fn stress_counts_every_block() {
     let cfg = Config::default();
-    // 60 runs a minute on a press at 256 RPM: 1 per 20 ticks, cycle 11.
+    // 60 runs a minute on a press at 256 RPM: 1 per 20 ticks, cycle 10, so half a press.
     let press = size(Machine::Press, RecipeKind::Pressing, 0, 0, 256.0, 1, 60.0, &cfg);
     assert_eq!(press.count, 1);
-    assert!((press.exact - 0.55).abs() < 1e-9);
+    assert!((press.exact - 0.5).abs() < 1e-9);
     assert_eq!(press.su, 8.0 * 256.0);
     // Crushing wheels work in pairs.
     let wheels = size(Machine::CrushingWheels, RecipeKind::Crushing, 400, 0, 256.0, 1, 50.0, &cfg);
