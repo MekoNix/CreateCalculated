@@ -1,4 +1,5 @@
-//! Machine timing, reproduced tick by tick from Create 6.0.10 because the game
+//! Machine timing, reproduced tick by tick from Create 6.0.10, whose code is under the MIT license,
+//! Copyright (c) The Create Team / The Creators of Create. It has to be exact because the game
 //! truncates to integers, so speed is not proportional to RPM.
 //! This is working time only: ticks a machine spends starting the next operation are left out,
 //! so real output can be slightly lower. The stone generator is the one exception.

@@ -49,7 +49,7 @@ dist:
 	rm -rf dist/$(DIST_NAME) $(DIST_ARCHIVE) $(DIST_ARCHIVE).sha256
 	mkdir -p dist/$(DIST_NAME)
 	cd target/$(DIST_TARGET)/release && strip $(PROGRAMS) && cp $(PROGRAMS) $(CURDIR)/dist/$(DIST_NAME)/
-	cp README.md packaging/install.sh packaging/createcalc.service dist/$(DIST_NAME)/
+	cp README.md LICENSE packaging/install.sh packaging/createcalc.service dist/$(DIST_NAME)/
 	tar -C dist -czf $(DIST_ARCHIVE) $(DIST_NAME)
 	cd dist && sha256sum $(DIST_NAME)-linux-x86_64.tar.gz > $(DIST_NAME)-linux-x86_64.tar.gz.sha256
 	@echo "$(DIST_ARCHIVE)"

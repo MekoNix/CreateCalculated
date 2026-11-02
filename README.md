@@ -60,7 +60,7 @@ Want it in your language? [Open an issue with the `Translate` label](https://git
 
 ## Licenses
 
-**CreateCalculated:** no license has been chosen yet.
+**CreateCalculated:** [MIT license](LICENSE). It covers the code of this project, not the game files or the item pictures in the screenshot above.
 
 Game files are not part of this repository or its releases, apart from the item pictures in the screenshot above. The programs download them on your computer, read them as archives and build everything locally. This project is not affiliated with Mojang or the Create team.
 
