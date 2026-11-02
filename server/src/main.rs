@@ -13,7 +13,10 @@ use createcalc_core::model::{Bundle, Catalog};
 use createcalc_core::plan::{consumers, plan, producers, Plan, PlanError, PlanRequest};
 use createcalc_core::power::{plan_power, PowerPlan};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::ffi::OsString;
+use std::io::IsTerminal;
+use std::path::{Path as FsPath, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
@@ -159,6 +162,46 @@ fn app(cat: Shared, icons: PathBuf) -> Router {
         .layer(CorsLayer::permissive())
 }
 
+/// How to run the picture tool: the binary next to this one if it was built, otherwise through
+/// cargo, because `cargo run --bin createcalc-server` builds only the server.
+fn icons_command(exe_dir: Option<&FsPath>) -> (OsString, Vec<&'static str>) {
+    let sibling = exe_dir.map(|d| d.join(format!("createcalc-icons{}", std::env::consts::EXE_SUFFIX)));
+    match sibling {
+        Some(file) if file.is_file() => (file.into_os_string(), vec![]),
+        _ => ("cargo".into(), vec!["run", "--release", "--bin", "createcalc-icons", "--"]),
+    }
+}
+
+/// Offers to build the pictures when there are none. Only a person at a terminal is asked,
+/// and a refusal is remembered so the question does not come back on every start.
+fn offer_icons(icons: &FsPath, bundle: &str) {
+    let declined = icons.join(".no-install-prompt");
+    if icons.join("index.json").is_file() {
+        return;
+    }
+    let hint = "Картинок предметов нет, на странице будут буквы. Установить: cargo run --release --bin createcalc-icons";
+    if declined.exists() || !std::io::stdin().is_terminal() {
+        println!("{hint}");
+        return;
+    }
+    println!("Картинок предметов нет, на странице будут буквы.");
+    println!("Скачать Minecraft и Create (примерно 50 МБ) и собрать картинки сейчас? Они останутся только на этом компьютере. [Y/n]");
+    let mut answer = String::new();
+    if std::io::stdin().read_line(&mut answer).is_err() || !matches!(answer.trim().to_lowercase().as_str(), "" | "y" | "yes" | "д" | "да") {
+        if std::fs::create_dir_all(icons).and_then(|()| std::fs::write(&declined, "")).is_err() {
+            eprintln!("не удалось запомнить ответ, вопрос повторится при следующем запуске");
+        }
+        println!("{hint}");
+        return;
+    }
+    let exe = std::env::current_exe().ok();
+    let (program, args) = icons_command(exe.as_deref().and_then(FsPath::parent));
+    let status = Command::new(program).args(args).arg("--out").arg(icons).arg("--bundle").arg(bundle).status();
+    if !matches!(status, Ok(s) if s.success()) {
+        eprintln!("Картинки не собрались, сервер запустится с буквами. {hint}");
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let mut args = std::env::args().skip(1);
@@ -174,13 +217,11 @@ async fn main() {
         std::process::exit(1)
     });
     println!("{} recipes loaded", bundle.recipes.len());
+    offer_icons(&icons, &path);
     let listener = tokio::net::TcpListener::bind(&address).await.unwrap_or_else(|e| {
         eprintln!("cannot bind {address}: {e}");
         std::process::exit(1)
     });
-    if !icons.join("index.json").is_file() {
-        println!("no pictures in {}, the page shows letters instead, see docs/icons.md", icons.display());
-    }
     println!("listening on http://{address}");
     if let Err(e) = axum::serve(listener, app(Arc::new(Catalog::new(bundle)), icons)).await {
         eprintln!("server stopped: {e}");
@@ -191,6 +232,23 @@ async fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn picture_tool_is_found_next_to_the_server_or_through_cargo() {
+        let folder = std::env::temp_dir().join(format!("createcalc-tool-test-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let (program, args) = icons_command(Some(&folder));
+        assert_eq!(program, "cargo");
+        assert!(args.contains(&"createcalc-icons"));
+        assert_eq!(icons_command(None).0, "cargo");
+
+        let tool = folder.join(format!("createcalc-icons{}", std::env::consts::EXE_SUFFIX));
+        std::fs::write(&tool, "").unwrap();
+        let (program, args) = icons_command(Some(&folder));
+        assert_eq!(program, tool.into_os_string());
+        assert!(args.is_empty());
+        std::fs::remove_dir_all(&folder).unwrap();
+    }
 
     #[test]
     fn icon_paths_cannot_leave_the_folder() {
