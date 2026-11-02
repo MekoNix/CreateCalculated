@@ -62,7 +62,7 @@ Want it in your language? [Open an issue with the `Translate` label](https://git
 
 **CreateCalculated:** [MIT license](LICENSE). It covers the code of this project, not the game files or the item pictures in the screenshot above.
 
-Game files are not part of this repository or its releases, apart from the item pictures in the screenshot above. The programs download them on your computer, read them as archives and build everything locally. This project is not affiliated with Mojang or the Create team.
+Game files are not part of this repository or its releases, apart from the item pictures in the screenshot above. The programs download them on your computer, read them as archives and build everything locally. The site above serves recipes and item pictures built this way, its About window names their owners. This project is not affiliated with Mojang or the Create team.
 
 - [Create](https://modrinth.com/mod/create): code under the MIT license, assets All Rights Reserved, see [its license](https://github.com/Creators-of-Create/Create/blob/mc1.21.1-6.0.10/LICENSE.md).
 - [Minecraft](https://www.minecraft.net/): by Mojang, under the [Minecraft EULA](https://www.minecraft.net/en-us/eula).

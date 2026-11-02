@@ -3,3 +3,5 @@ target/
 *.jar
 .DS_Store
 /dist/
+.vercel
+.env*

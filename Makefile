@@ -7,13 +7,15 @@ RELEASE := target/release
 ADDRESS ?= 127.0.0.1:3000
 PREFIX ?= /opt/createcalc
 
-# `make dist` links everything statically so the result runs on any x86-64 Linux.
+# `make dist` links everything statically so the result runs on any x86-64 Linux. The path flag and
+# the tar options keep the builder's home folder and user name out of what gets published.
 DIST_TARGET ?= x86_64-unknown-linux-musl
 DIST_NAME := createcalc-$(VERSION)
 DIST_ARCHIVE := dist/$(DIST_NAME)-linux-x86_64.tar.gz
 # The ring crate needs a C compiler. Plain gcc does, as long as it does not call glibc's checked functions.
 DIST_ENV := CC_x86_64_unknown_linux_musl=$${CC_x86_64_unknown_linux_musl:-$$(command -v musl-gcc || echo gcc)} \
-	CFLAGS_x86_64_unknown_linux_musl="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0"
+	CFLAGS_x86_64_unknown_linux_musl="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0" \
+	RUSTFLAGS="--remap-path-prefix=$(HOME)=/build"
 
 .PHONY: help build test run data install dist vercel clean
 
@@ -50,7 +52,7 @@ dist:
 	mkdir -p dist/$(DIST_NAME)
 	cd target/$(DIST_TARGET)/release && strip $(PROGRAMS) && cp $(PROGRAMS) $(CURDIR)/dist/$(DIST_NAME)/
 	cp README.md LICENSE packaging/install.sh packaging/createcalc.service dist/$(DIST_NAME)/
-	tar -C dist -czf $(DIST_ARCHIVE) $(DIST_NAME)
+	tar --owner=0 --group=0 --numeric-owner -C dist -czf $(DIST_ARCHIVE) $(DIST_NAME)
 	cd dist && sha256sum $(DIST_NAME)-linux-x86_64.tar.gz > $(DIST_NAME)-linux-x86_64.tar.gz.sha256
 	@echo "$(DIST_ARCHIVE)"
 
