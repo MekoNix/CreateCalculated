@@ -137,7 +137,7 @@ input[type=number]::-webkit-inner-spin-button{display:none}
     <h3>Схема</h3>
     <label class="chk line"><input id="heat" type="checkbox"> Нагрев: бёрнеры и топливо</label>
     <label class="fld line"><span>RPM лент</span><input id="belt" class="inp" type="number" min="1" step="any"></label>
-    <div class="fld line"><span>Партия дробилки и вентилятора</span><div class="seg" id="dBatch"></div></div>
+    <div class="fld line"><span title="Для дробилки и вентилятора">Партия машин</span><div class="seg" id="dBatch"></div></div>
     <div class="fld line"><span>Стопка на ленте</span><div class="seg" id="dStack"></div></div>
     <label class="fld line"><span>Парусов на мельницу</span><input id="cSails" class="inp" type="number" min="8" step="8"></label>
     <h3>Конфиг Create</h3>
@@ -601,7 +601,7 @@ function renderEdges(){
 function applyView(){
   $('world').style.transform = `translate(${view.x}px,${view.y}px) scale(${view.k})`;
   // Far out, details are unreadable anyway: keep what identifies a card and make it bigger.
-  $('world').classList.toggle('far', view.k < .6);
+  $('world').classList.toggle('far', view.k < .4);
 }
 function fit(){
   const ns = [...G.nodes.values()];
