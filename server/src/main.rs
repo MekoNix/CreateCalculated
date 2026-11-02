@@ -4,7 +4,7 @@
 
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use createcalc_core::config::Config;
@@ -116,8 +116,12 @@ async fn power(Json(req): Json<PowerRequest>) -> Result<Json<PowerPlan>, ApiErro
     Ok(Json(plan_power(req.su, req.sails, &req.config)))
 }
 
+/// The page is built in, so opening the server's address is all a player on the network needs.
+const PAGE: &str = include_str!("../../mockups/graph.html");
+
 fn app(cat: Shared) -> Router {
     Router::new()
+        .route("/", get(|| async { Html(PAGE) }))
         .route("/api/health", get(|| async { "ok" }))
         .route("/api/items", get(items))
         .route("/api/recipes/{*id}", get(recipe))
