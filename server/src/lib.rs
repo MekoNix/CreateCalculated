@@ -2,7 +2,7 @@
 
 use axum::extract::{Path, Query, State};
 use axum::http::{header, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use createcalc_core::config::Config;
@@ -149,10 +149,14 @@ async fn icon_file(State(folder): State<Arc<PathBuf>>, Path(path): Path<String>)
     ([(header::CONTENT_TYPE, kind), (header::CACHE_CONTROL, cache)], bytes).into_response()
 }
 
+/// The page is built in, so opening the server's address is all a player on the network needs.
+const PAGE: &str = include_str!("../page.html");
+
 /// The whole site. Pictures are read from `icons`, the rest is in memory.
 pub fn app(cat: Arc<Catalog>, icons: PathBuf) -> Router {
     let pictures = Router::new().route("/api/icons/{*path}", get(icon_file)).with_state(Arc::new(icons));
     Router::new()
+        .route("/", get(|| async { Html(PAGE) }))
         .route("/api/health", get(|| async { "ok" }))
         .route("/api/items", get(items))
         .route("/api/tags/defaults", get(tag_defaults))
