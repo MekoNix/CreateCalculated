@@ -1,4 +1,5 @@
-//! Machine timing, reproduced tick by tick from Create 6.0.10 because the game
+//! Machine timing, reproduced tick by tick from Create 6.0.10, whose code is under the MIT license,
+//! Copyright (c) The Create Team / The Creators of Create. It has to be exact because the game
 //! truncates to integers, so speed is not proportional to RPM.
 //! This is working time only: ticks a machine spends starting the next operation are left out,
 //! so real output can be slightly lower. The stone generator is the one exception.
@@ -230,6 +231,26 @@ pub fn fan_range(rpm: f64, cfg: &Config) -> f64 {
 /// and `BeltInventory` keeps stacks one block apart.
 pub const BELT_STACKS_PER_MIN_PER_RPM: f64 = 1200.0 / 480.0;
 
+/// The two funnels run on the same timer, `FunnelBlockEntity.startCooldown`. Only brass has an active
+/// filter, `supportsFiltering`, and without one `getAmountToExtract` gives 1: andesite moves one item
+/// per transfer, brass up to its set amount, 64 unless changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Funnel {
+    #[default]
+    Andesite,
+    Brass,
+}
+
+impl Funnel {
+    pub fn item(self) -> &'static str {
+        match self {
+            Funnel::Andesite => "create:andesite_funnel",
+            Funnel::Brass => "create:brass_funnel",
+        }
+    }
+}
+
 /// How one flow of items travels. Fluids have none.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Transport {
@@ -239,8 +260,10 @@ pub struct Transport {
     pub belts: u32,
     /// The slowest single belt that would carry this flow.
     pub min_belt_rpm: f64,
-    /// Funnels needed to load it, each moving one stack per `default_extraction_timer` ticks.
+    /// Funnels needed to load it, each moving one stack every `default_extraction_timer` + 1 ticks.
     pub funnels: u32,
+    /// The kind to build: the one asked for, or brass when an andesite funnel could not load the stack.
+    pub funnel: Funnel,
     /// The source yields less than a stack at a time, so items must collect in a container first.
     pub needs_buffer: bool,
 }
@@ -250,17 +273,20 @@ fn need(amount: f64) -> u32 {
 }
 
 /// Sizes the transport for `per_min` items moved in stacks of `stack`.
-pub fn transport(per_min: f64, stack: u32, belt_rpm: f64, source_yield: f64, cfg: &Config) -> Transport {
+pub fn transport(per_min: f64, stack: u32, belt_rpm: f64, source_yield: f64, funnel: Funnel, cfg: &Config) -> Transport {
     let stack = stack.max(1);
     let stacks_per_min = per_min / stack as f64;
     let min_belt_rpm = stacks_per_min / BELT_STACKS_PER_MIN_PER_RPM;
-    let funnel_ops = 1200.0 / cfg.default_extraction_timer.max(1) as f64;
+    // A transfer starts the cooldown, which counts down for the whole timer, and the next transfer
+    // comes on the tick after that (`FunnelBlockEntity.tick`).
+    let funnel_ops = 1200.0 / (cfg.default_extraction_timer.max(1) + 1) as f64;
     Transport {
         stack,
         belt_rpm,
         belts: need(min_belt_rpm / belt_rpm),
         min_belt_rpm,
         funnels: need(stacks_per_min / funnel_ops),
+        funnel: if stack > 1 { Funnel::Brass } else { funnel },
         needs_buffer: (stack as f64) > source_yield,
     }
 }

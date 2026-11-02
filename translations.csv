@@ -6,7 +6,6 @@ perMin,/min,/мин
 mb,mB,мБ
 modeNormal,Normal,Обычный
 modeAuto,Full automation,Полная автоматизация
-recipes,Recipes,Рецепты
 stressBuildings,Stress and buildings,Нагрузка и здания
 targets,Targets,Цели
 branches,Branches,Отростки
@@ -16,12 +15,16 @@ buildMaterials,Materials for the whole build,Материалы на всю по
 materialsNote,"Belts are counted as lines. Shafts, pipes, pumps, power sources and what stands in fan streams (water, lava, fire) are not included.","Лента указана по числу линий. Валы, трубы, насосы, источники энергии и то, что стоит в потоке вентиляторов (вода, лава, огонь), не входят."
 copy,Copy,Скопировать
 settings,Settings,Настройки
+language,Language,Язык
 scheme,Scheme,Схема
 heat,Heat: burners and fuel,Нагрев: бёрнеры и топливо
 askFirst,Ask before changing a recipe,Спрашивать перед сменой рецепта
 beltRpm,Belt RPM,RPM лент
 batch,Machine batch,Партия машин
 beltStack,Stack on a belt,Стопка на ленте
+funnel,Funnels,Шлюзы
+funnelAndesite,Andesite,Андезитовые
+funnelBrass,Brass,Латунные
 sails,Sails per windmill,Парусов на мельницу
 createConfig,Create config,Конфиг Create
 maxRpm,RPM limit,Предел RPM
@@ -45,7 +48,9 @@ tipHeat,Show on cards and under stress how many burners and how much fuel heated
 tipAsk,"Before a recipe is replaced, show how resources and stress would change. When off, the recipe changes at once.","Перед заменой рецепта показать, как изменятся ресурсы и нагрузка. Выключено: рецепт меняется сразу."
 tipBelt,"Speed of the belts, which sets how many belts a flow needs. Empty: the same as the machines.","Скорость лент. От неё зависит, сколько лент нужно на поток. Пусто: как у машин."
 tipBatch,How many items a machine handles at once. Applies to crushing wheels and fans: a larger batch takes longer but gives more per minute.,"Сколько предметов машина обрабатывает за раз. Действует на дробильные колёса и вентиляторы: большая партия идёт дольше, но за минуту выходит больше."
-tipStack,How many items lie in one stack on a belt. Larger stacks need fewer belts for the same flow. A source handing over less than a stack needs a chest and a filtered funnel.,"Сколько предметов лежит в одной стопке на ленте. Больше стопка: меньше лент на тот же поток. Если источник отдаёт меньше стопки за раз, нужен ящик и воронка с фильтром."
+tipStack,"How many items lie in one stack on a belt. Larger stacks need fewer belts for the same flow, but only a brass funnel can put them on a belt. A source handing over less than a stack also needs a chest.","Сколько предметов лежит в одной стопке на ленте. Больше стопка: меньше лент на тот же поток, но положить её на ленту может только латунный шлюз. Если источник отдаёт меньше стопки за раз, нужен ещё ящик."
+tipFunnel,"Which funnels the scheme counts. Both work at the same speed. An andesite funnel has no filter and moves one item at a time. A brass funnel has a filter and moves as many as it is set to, up to 64 by default. So a stack above 1 is always counted with a brass funnel.","Какие шлюзы считать в схеме. Скорость у них одинаковая. Андезитовый шлюз без фильтра и двигает по одному предмету. У латунного есть фильтр, и он двигает столько, сколько настроено, по умолчанию до 64. Поэтому стопка больше 1 всегда считается с латунным шлюзом."
+funnelForced,"Andesite funnels move one item at a time, so flows with a stack above 1 are counted with brass funnels.","Андезитовые шлюзы двигают по одному предмету, поэтому потоки со стопкой больше 1 считаются с латунными шлюзами."
 tipSails,"How many sail blocks one windmill has. Every 8 sails give 1 RPM, up to 16 RPM. Used only to count windmills under stress.","Сколько блоков парусов у одной мельницы. Каждые 8 парусов дают 1 RPM, но не больше 16 RPM. Нужно только для подсчёта мельниц в нагрузке."
 tipMax,"maxRotationSpeed in create-server.toml, 256 by default. The game allows no higher speed, and neither does the calculator.","maxRotationSpeed в create-server.toml, по умолчанию 256. Скорость выше этой игра не даст, и расчёт её не примет."
 tipFan,"fanProcessingTime in create-server.toml, 150 by default. How many ticks an item is processed in a fan stream.","fanProcessingTime в create-server.toml, по умолчанию 150. Сколько тиков предмет обрабатывается в потоке вентилятора."
@@ -56,7 +61,7 @@ tipShapeless,"allowShapelessInMixer in create-server.toml, on by default. A mixe
 tipCrafter,"allowRegularCraftingInCrafter in create-server.toml, on by default. Mechanical crafters do regular crafting table recipes.","allowRegularCraftingInCrafter в create-server.toml, по умолчанию включено. Механический крафтер делает обычные рецепты верстака."
 tipStone,"allowStonecuttingOnSaw in create-server.toml, on by default. The mechanical saw does stonecutter recipes.","allowStonecuttingOnSaw в create-server.toml, по умолчанию включено. Механическая пила делает рецепты камнереза."
 tipToml,Read the server settings from a file. It is in the world folder: serverconfig/create-server.toml.,Прочитать настройки сервера из файла. Он лежит в папке мира: serverconfig/create-server.toml.
-tipReset,"Bring back Create defaults, belt RPM, batch, stack and sails.","Вернуть значения Create по умолчанию, RPM лент, партию, стопку и паруса."
+tipReset,"Bring back Create defaults, belt RPM, batch, stack, funnels and sails.","Вернуть значения Create по умолчанию, RPM лент, партию, стопку, шлюзы и паруса."
 cfgDefault,Create defaults.,Значения Create по умолчанию.
 cfgOwn,Custom settings.,Свои настройки.
 cfgLoaded,Loaded {0}.,Загружен {0}.
@@ -173,11 +178,11 @@ flowTitle,Flow,Поток
 pipesNote,"Fluids go through pipes, which are not counted.","Жидкость идёт по трубам, они не считаются."
 stackTitle,Stack size,Размер стопки
 stackAll,For all flows of this item.,Для всех потоков этого предмета.
-beltsFunnels,Belts and funnels,Лента и воронки
+beltsFunnels,Belts and funnels,Лента и шлюзы
 beltsAt,Belts at {0} RPM,Лент при {0} RPM
 oneFrom,One is enough from,Хватит одной от
-funnelsLoad,Funnels for loading,Воронок на загрузку
-bufferNote,"The source hands over less than a stack at a time, and stacks do not form on a belt by themselves. It needs a chest and a funnel filtered to {0} items.","Источник отдаёт меньше стопки за раз, а на ленте стопки сами не собираются. Нужен ящик и воронка с фильтром на {0} шт."
+funnelsLoad,Funnels for loading,Шлюзов на загрузку
+bufferNote,"The source hands over less than a stack at a time, and stacks do not form on a belt by themselves. It needs a chest and a brass funnel set to exactly {0} items.","Источник отдаёт меньше стопки за раз, а на ленте стопки сами не собираются. Нужен ящик и латунный шлюз, настроенный ровно на {0} шт."
 withAxe,: axe in hand,: топор в руке
 stripNote,A deployer with an axe hits a placed log. Only the hit is counted: placing and breaking the block and axe wear are not.,Деплоер с топором бьёт по поставленному бревну. Учтён только сам удар: установка и разрушение блока и износ топора не считаются.
 addHint,Add an item. Several work too: shared parts are counted together.,Добавьте предмет. Можно сразу несколько: общие детали посчитаются вместе.

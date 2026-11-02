@@ -5,7 +5,7 @@
 //! The objective minimises raw material cost, with a tiny cost per run to avoid pointless loops.
 
 use crate::config::Config;
-use crate::machines::{self, Load, Machine, Transport};
+use crate::machines::{self, Funnel, Load, Machine, Transport};
 use crate::model::{Catalog, Heat, Recipe, RecipeKind, ResId, STRIPPING_PREFIX};
 use crate::power::{CAKE_BURN_TICKS, COAL_BURN_TICKS};
 use good_lp::{constraint, variable, variables, Expression, Solution, SolverModel, Variable};
@@ -93,6 +93,8 @@ pub struct PlanRequest {
     pub stack: u32,
     /// Stack size per item.
     pub stack_sizes: BTreeMap<ResId, u32>,
+    /// Funnels the scheme is built with. A stack above 1 takes brass whatever is chosen here.
+    pub funnel: Funnel,
     /// Stops at ready materials such as ingots instead of going down to ore.
     pub stop_at_materials: bool,
     /// Extra recipes hung off the scheme, applied in order.
@@ -127,6 +129,7 @@ impl Default for PlanRequest {
             belt_rpm: None,
             stack: 1,
             stack_sizes: BTreeMap::new(),
+            funnel: Funnel::default(),
             stop_at_materials: false,
             branches: vec![],
         }
@@ -856,7 +859,7 @@ fn build_list(cat: &Catalog, nodes: &[Node], edges: &[Edge]) -> Vec<BuildItem> {
     for e in edges.iter().filter(|e| !e.to.starts_with("surplus:")) {
         let Some(t) = &e.transport else { continue };
         *items.entry("create:belt_connector").or_default() += t.belts;
-        *items.entry("create:andesite_funnel").or_default() += t.funnels;
+        *items.entry(t.funnel.item()).or_default() += t.funnels;
         if t.needs_buffer {
             *items.entry("minecraft:chest").or_default() += 1;
         }
@@ -886,7 +889,7 @@ fn add_transport(cat: &Catalog, req: &PlanRequest, nodes: &[Node], edges: &mut [
             Some(NodeKind::Generate { .. }) => 1.0,
             _ => f64::INFINITY,
         };
-        e.transport = Some(machines::transport(e.per_minute, stack, belt_rpm, source_yield, &req.config));
+        e.transport = Some(machines::transport(e.per_minute, stack, belt_rpm, source_yield, req.funnel, &req.config));
     }
 }
 

@@ -2,7 +2,7 @@
 # Builds the site as Vercel serves it and uploads it: a test version, or the real one with --prod.
 # The very first upload of a new project goes live whatever the flag says, later ones follow it.
 # Recipes and pictures must already be in data/. Only the finished output in data/vercel is
-# uploaded, so no source code or game JAR leaves this computer.
+# uploaded: no source code or game JAR, but the site does publish the recipes and pictures.
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -18,7 +18,8 @@ for file in data/bundle.json data/icons/index.json; do
 done
 
 rustup target add "$target" >/dev/null
-cargo build --release -p createcalc-server --features vercel --bin createcalc-vercel --target "$target"
+# Without the flag the program would carry the builder's home folder in its panic messages.
+RUSTFLAGS="--remap-path-prefix=$HOME=/build" cargo build --release -p createcalc-server --features vercel --bin createcalc-vercel --target "$target"
 
 rm -rf "$out"
 mkdir -p "$out/static/api" "$out/functions/api.func"
