@@ -9,7 +9,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use createcalc_core::config::Config;
 use createcalc_core::model::{Bundle, Catalog};
-use createcalc_core::plan::{plan, producers, Plan, PlanError, PlanRequest};
+use createcalc_core::plan::{consumers, plan, producers, Plan, PlanError, PlanRequest};
 use createcalc_core::power::{plan_power, PowerPlan};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -72,6 +72,12 @@ async fn item_producers(State(cat): State<Shared>, Query(query): Query<ProducerQ
     Json(serde_json::to_value(list).unwrap_or_default())
 }
 
+/// Recipes that use an item, directly or through a tag.
+async fn item_consumers(State(cat): State<Shared>, Query(query): Query<ProducerQuery>) -> Json<serde_json::Value> {
+    let list = consumers(&cat, &query.item, &Config::default());
+    Json(serde_json::to_value(list).unwrap_or_default())
+}
+
 async fn default_config() -> Json<Config> {
     Json(Config::default())
 }
@@ -116,6 +122,7 @@ fn app(cat: Shared) -> Router {
         .route("/api/items", get(items))
         .route("/api/recipes/{*id}", get(recipe))
         .route("/api/producers", get(item_producers))
+        .route("/api/consumers", get(item_consumers))
         .route("/api/config/default", get(default_config))
         .route("/api/config/parse", post(parse_config))
         .route("/api/plan", post(make_plan))

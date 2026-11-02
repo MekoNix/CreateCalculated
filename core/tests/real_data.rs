@@ -2,7 +2,7 @@
 //! so these skip themselves when `data/bundle.json` is missing. See docs/import.md.
 
 use createcalc_core::model::{Bundle, Catalog};
-use createcalc_core::plan::{plan, Mode, NodeKind, Plan, PlanRequest, Target};
+use createcalc_core::plan::{plan, Branch, Mode, NodeKind, Plan, PlanRequest, Target};
 
 fn catalog() -> Option<Catalog> {
     let text = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../data/bundle.json")).ok()?;
@@ -105,4 +105,14 @@ fn materials_stop_at_ingots() {
     assert!(list.contains("minecraft:iron_ingot") && list.contains("create:andesite_alloy"), "{list}");
     assert!(!list.contains("raw_"), "{list}");
     assert!(p.warnings.is_empty(), "{:?}", p.warnings);
+}
+
+#[test]
+fn arrows_use_up_the_flint_from_washing_gravel() {
+    let Some(cat) = catalog() else { return };
+    let mut req = PlanRequest { targets: vec![Target { item: "minecraft:iron_ingot".into(), per_minute: 60.0 }], mode: Mode::FullAuto, ..Default::default() };
+    req.branches = vec![Branch { recipe: "minecraft:arrow".into(), input: "minecraft:flint".into(), per_minute: None }];
+    let p = plan(&cat, &req).unwrap();
+    assert!((p.branches[0].per_minute - 4320.0).abs() < 0.01, "{:?}", p.branches);
+    assert!(!p.nodes.iter().any(|n| matches!(&n.kind, NodeKind::Surplus { res, .. } if res == "minecraft:flint")));
 }

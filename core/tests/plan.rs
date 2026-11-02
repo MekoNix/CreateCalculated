@@ -2,7 +2,7 @@
 
 use createcalc_core::machines::Machine;
 use createcalc_core::model::{AssemblyStep, Bundle, Catalog, Heat, Output, Recipe, RecipeKind, Stack};
-use createcalc_core::plan::{plan, NodeKind, NodeOverride, Plan, PlanError, PlanRequest, Target};
+use createcalc_core::plan::{consumers, plan, Branch, NodeKind, NodeOverride, Plan, PlanError, PlanRequest, Target};
 use createcalc_core::power::plan_power;
 
 fn stack(res: &str, amount: f64) -> Stack {
@@ -403,4 +403,74 @@ fn build_list_includes_transport_and_buffers() {
     assert_eq!(built(&p, "minecraft:chest"), 0);
     req.stack_sizes.insert("sheet".into(), 16);
     assert_eq!(built(&plan(&cat, &req).unwrap(), "minecraft:chest"), 1);
+}
+
+fn branch_catalog() -> Catalog {
+    Catalog::new(Bundle {
+        recipes: vec![
+            recipe("wash", RecipeKind::Splashing, vec![stack("gravel", 1.0)], vec![out("nugget", 1.0, 0.125), out("flint", 1.0, 0.25)]),
+            recipe("arrow", RecipeKind::CraftingShapeless, vec![stack("#flints", 1.0), stack("feather", 1.0)], vec![out("arrow", 4.0, 1.0)]),
+            recipe("mill_flint", RecipeKind::Milling, vec![stack("gravel", 1.0)], vec![out("flint", 1.0, 1.0)]),
+        ],
+        tags: [("#flints".to_string(), vec!["flint".to_string()])].into(),
+        names: Default::default(),
+    })
+}
+
+fn branch_request(nuggets: f64, per_minute: Option<f64>) -> PlanRequest {
+    let mut req = request("nugget", nuggets);
+    req.base_resources = Some(vec!["gravel".into(), "feather".into()]);
+    req.branches = vec![Branch { recipe: "arrow".into(), input: "flint".into(), per_minute }];
+    req
+}
+
+#[test]
+fn branch_takes_all_the_leftover_and_follows_it() {
+    let cat = branch_catalog();
+    // 60 nuggets wash 480 gravel, which leaves 120 flint: 480 arrows, and nothing left over.
+    let p = plan(&cat, &branch_request(60.0, None)).unwrap();
+    close(p.branches[0].per_minute, 480.0);
+    close(surplus(&p, "flint"), 0.0);
+    close(gathered(&p, "gravel"), 480.0);
+    close(runs(&p, "mill_flint"), 0.0);
+    // Twice the nuggets, twice the arrows, without touching the branch.
+    let p = plan(&cat, &branch_request(120.0, None)).unwrap();
+    close(p.branches[0].per_minute, 960.0);
+}
+
+#[test]
+fn fixed_branch_keeps_its_amount_and_makes_up_the_shortage() {
+    let cat = branch_catalog();
+    let p = plan(&cat, &branch_request(60.0, Some(800.0))).unwrap();
+    close(p.branches[0].per_minute, 800.0);
+    // 800 arrows need 200 flint: 120 from washing and 80 milled on purpose.
+    close(runs(&p, "mill_flint"), 80.0);
+    close(surplus(&p, "flint"), 0.0);
+}
+
+#[test]
+fn branch_errors_and_empty_leftover() {
+    let cat = branch_catalog();
+    let mut req = branch_request(60.0, None);
+    req.branches[0].input = "zinc".into();
+    assert!(matches!(plan(&cat, &req), Err(PlanError::Invalid(_))));
+    req.branches[0].recipe = "nope".into();
+    assert!(matches!(plan(&cat, &req), Err(PlanError::Invalid(_))));
+    // Nothing is left over when a recipe with no flint makes the nuggets.
+    let mut req = request("flint", 60.0);
+    req.base_resources = Some(vec!["gravel".into(), "feather".into()]);
+    req.recipe_choice.insert("flint".into(), "mill_flint".into());
+    req.branches = vec![Branch { recipe: "arrow".into(), input: "flint".into(), per_minute: None }];
+    let p = plan(&cat, &req).unwrap();
+    assert!(p.branches.is_empty());
+    assert!(p.warnings.iter().any(|w| w.contains("no leftover")));
+}
+
+#[test]
+fn consumers_see_through_tags() {
+    let cat = branch_catalog();
+    let ids: Vec<&str> = consumers(&cat, "flint", &Default::default()).iter().map(|r| r.id.as_str()).collect();
+    assert_eq!(ids, ["arrow"]);
+    let ids: Vec<&str> = consumers(&cat, "gravel", &Default::default()).iter().map(|r| r.id.as_str()).collect();
+    assert_eq!(ids, ["wash", "mill_flint"]);
 }

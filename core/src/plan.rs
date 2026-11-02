@@ -93,6 +93,19 @@ pub struct PlanRequest {
     pub stack_sizes: BTreeMap<ResId, u32>,
     /// Stops at ready materials such as ingots instead of going down to ore.
     pub stop_at_materials: bool,
+    /// Extra recipes hung off the scheme, applied in order.
+    pub branches: Vec<Branch>,
+}
+
+/// A recipe added to the scheme from one of its items.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Branch {
+    pub recipe: String,
+    /// The item the branch starts from, which the recipe consumes.
+    pub input: ResId,
+    /// Output of the recipe's main item per minute. When unset the branch takes all the
+    /// leftover `input`, and follows it when the rest of the scheme changes.
+    pub per_minute: Option<f64>,
 }
 
 impl Default for PlanRequest {
@@ -113,6 +126,7 @@ impl Default for PlanRequest {
             stack: 1,
             stack_sizes: BTreeMap::new(),
             stop_at_materials: false,
+            branches: vec![],
         }
     }
 }
@@ -186,6 +200,15 @@ pub struct Plan {
     pub manual: Vec<ResId>,
     /// Everything to craft or place to build this scheme. Shafts, pipes and power are not included.
     pub build: Vec<BuildItem>,
+    /// What each branch came to.
+    pub branches: Vec<ResolvedBranch>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ResolvedBranch {
+    pub recipe: String,
+    pub item: ResId,
+    pub per_minute: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -383,7 +406,63 @@ fn output_units(r: &Recipe) -> f64 {
     units.max(1.0)
 }
 
+/// Recipes that consume an item, directly or through a tag.
+pub fn consumers<'a>(cat: &'a Catalog, item: &str, cfg: &Config) -> Vec<&'a Recipe> {
+    cat.recipes().iter().filter(|r| runnable(r, cfg) && r.inputs.iter().any(|s| takes(cat, &s.res, item))).collect()
+}
+
+fn takes(cat: &Catalog, input: &str, item: &str) -> bool {
+    input == item || cat.tag_members(input).iter().any(|m| m == item)
+}
+
+/// Plans the scheme with its branches. A branch on all the leftovers needs the scheme before it
+/// to know how much is left, so each one is resolved on top of the previous.
 pub fn plan(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
+    if req.branches.is_empty() {
+        return solve(cat, req);
+    }
+    let mut current = req.clone();
+    current.branches = vec![];
+    let mut resolved = Vec::new();
+    let mut warnings = Vec::new();
+    for b in &req.branches {
+        let r = cat.recipe(&b.recipe).ok_or_else(|| PlanError::Invalid(format!("no recipe {}", b.recipe)))?;
+        let main = r.main_output().ok_or_else(|| PlanError::Invalid(format!("{} has no output", b.recipe)))?.clone();
+        let needed = r.inputs.iter().find(|s| takes(cat, &s.res, &b.input));
+        let needed = needed.ok_or_else(|| PlanError::Invalid(format!("{} does not use {}", b.recipe, b.input)))?.amount;
+        let per_minute = match b.per_minute {
+            Some(rate) => rate,
+            None => {
+                let left: f64 = solve(cat, &current)?
+                    .nodes
+                    .iter()
+                    .filter_map(|n| match &n.kind {
+                        NodeKind::Surplus { res, per_minute } if res == &b.input => Some(*per_minute),
+                        _ => None,
+                    })
+                    .sum();
+                let per_run: f64 = r.outputs.iter().filter(|o| o.res == main).map(|o| o.expected()).sum();
+                left / needed * per_run
+            }
+        };
+        if per_minute <= EPS {
+            warnings.push(format!("{}: no leftover {} for this branch", b.recipe, b.input));
+            continue;
+        }
+        match current.targets.iter_mut().find(|t| t.item == main) {
+            Some(t) => t.per_minute += per_minute,
+            None => current.targets.push(Target { item: main.clone(), per_minute }),
+        }
+        current.recipe_choice.insert(main.clone(), b.recipe.clone());
+        resolved.push(ResolvedBranch { recipe: b.recipe.clone(), item: main, per_minute });
+    }
+    let mut result = solve(cat, &current)?;
+    result.branches = resolved;
+    result.warnings.extend(warnings);
+    Ok(result)
+}
+
+fn solve(cat: &Catalog, req: &PlanRequest) -> Result<Plan, PlanError> {
     if req.targets.is_empty() {
         return Err(PlanError::Invalid("no targets".into()));
     }
@@ -667,7 +746,7 @@ fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, stock: &HashSet<
         coal_per_min: heated as f64 * 1200.0 / COAL_BURN_TICKS,
         cake_per_min: superheated as f64 * 1200.0 / CAKE_BURN_TICKS,
     });
-    Ok(Plan { nodes, edges, total_su, machines: machine_counts, heat, warnings, manual, build })
+    Ok(Plan { nodes, edges, total_su, machines: machine_counts, heat, warnings, manual, build, branches: vec![] })
 }
 
 /// Works out what each recipe is there for, and which other recipes could do it.
