@@ -8,6 +8,7 @@
 | `server` | HTTP API над ядром (axum) |
 | `mockups` | `graph.html`: прототип интерфейса, граф на настоящем API |
 | `docs` | Документация |
+| `tools` | Датапак для замеров в игре, см. [docs/measurements.md](docs/measurements.md) |
 
 ## Запуск
 
