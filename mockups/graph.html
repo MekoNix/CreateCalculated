@@ -67,10 +67,14 @@ button,input,select{font:inherit;color:inherit}
 .inp:focus{border-color:#5a6470}
 input[type=number]{appearance:textfield}
 input[type=number]::-webkit-inner-spin-button{display:none}
-#search{width:270px;padding-left:31px}
-#searchWrap{position:relative}
-#searchIcon{position:absolute;left:6px;top:4px;display:flex}
-#sugg{position:absolute;left:0;top:32px;width:330px;background:var(--card);border:1px solid var(--line2);border-radius:6px;padding:3px;display:none;max-height:380px;overflow:auto}
+#sugg{display:none;max-height:260px;overflow:auto;margin-top:6px;border:1px solid var(--line);border-radius:6px;padding:3px}
+.gadd{display:flex;align-items:center;gap:6px}
+#side .gadd #search{flex:1;width:auto;min-width:0}
+#side .gadd #newPer{width:58px;flex:none}
+#goalList{margin-top:6px}
+#goalList .row{gap:6px}
+#goalList .gn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#side #goalList .gper{width:62px;height:24px;flex:none}
 #sugg div{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:3px;cursor:pointer}
 #sugg div small{margin-left:auto;color:var(--dim);font-size:10px}
 #sugg div.on{background:#2a2e35}
@@ -156,8 +160,6 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 <body>
 <div id="canvas"><div id="world"><svg id="edges"></svg><div id="labels"></div><div id="nodes"></div></div></div>
 <header id="bar">
-  <div id="searchWrap"><span id="searchIcon"></span><input id="search" class="inp" placeholder="Что производить" autocomplete="off" spellcheck="false" aria-label="Цель"><div id="sugg"></div></div>
-  <label class="fld"><input id="per" class="inp" type="number" min="0.01" step="any" style="width:64px"> в минуту</label>
   <label class="fld"><input id="rpm" class="inp" type="number" min="1" step="any" style="width:58px"> RPM</label>
   <div class="seg" id="mode"><button data-v="normal">Обычный</button><button data-v="full_auto">Полная автоматизация</button></div>
   <button id="jeiBtn" class="btn">Рецепты</button>
@@ -165,6 +167,11 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 </header>
 <div id="ask" hidden><div id="askBox" role="dialog" aria-modal="true"></div></div>
 <aside id="side">
+  <details id="sGoal" open><summary>Цели</summary><div class="sb">
+    <div class="gadd"><input id="search" class="inp" placeholder="Добавить предмет" autocomplete="off" spellcheck="false" aria-label="Добавить предмет"><input id="newPer" class="inp" type="number" min="0.01" step="any" value="60" title="Скорость для новых предметов" aria-label="В минуту для новых предметов"><span class="d">/мин</span></div>
+    <div id="sugg"></div>
+    <div id="goalList"></div>
+  </div></details>
   <details id="sBr" open hidden><summary>Отростки</summary><div class="sb" id="brBody"></div></details>
   <details id="sMat" open><summary>Материалы</summary><div class="sb">
     <h3>Что построить</h3><div id="matBuild"></div>
@@ -207,7 +214,7 @@ const SNAP = /*SNAP*/{"plan":{"nodes":[{"id":"recipe:create:compacting/andesite_
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-const S = {ask:true, branches:[], batch:1, stack:1, sails:64, config:null, belt:null, stacks:{}, item:'create:andesite_alloy', itemName:'', per:60, rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
+const S = {ask:true, branches:[], batch:1, stack:1, sails:64, config:null, belt:null, stacks:{}, targets:[{item:'create:andesite_alloy', per:60}], rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
 const items = new Map();
 const recipes = new Map();
 let itemsLoaded = false, plan = null, power = null, offline = false, seq = 0;
@@ -330,17 +337,23 @@ function loadRecipe(id){
   return api('/api/recipes/' + encodeURI(id)).then(r => (recipes.set(id, r), r));
 }
 function request(){
-  return {targets:[{item:S.item, per_minute:S.per}], rpm:S.rpm, mode:S.mode, include_heat:S.heat, stock:S.stock, recipe_choice:S.choice, overrides:S.overrides, belt_rpm:S.belt, stack_sizes:S.stacks, branches:S.branches, batch:S.batch, stack:S.stack, ...(S.config ? {config:S.config} : {})};
+  return {targets:S.targets.map(x => ({item:x.item, per_minute:x.per})), rpm:S.rpm, mode:S.mode, include_heat:S.heat, stock:S.stock, recipe_choice:S.choice, overrides:S.overrides, belt_rpm:S.belt, stack_sizes:S.stacks, branches:S.branches, batch:S.batch, stack:S.stack, ...(S.config ? {config:S.config} : {})};
 }
 const mainRes = r => r && r.outputs[0] ? r.outputs[0].res : null;
 const outputRate = (n, r, res) => n.runs_per_min * r.outputs.filter(o => o.res === res).reduce((s, o) => s + o.amount * o.chance, 0);
 const nodeRes = n => n.type === 'recipe' ? (n.produces || mainRes(recipes.get(n.recipe))) : n.res;
 
-let branchItem = null;
+const EMPTY_PLAN = {nodes:[], edges:[], total_su:0, machines:{}, heat:null, warnings:[], manual:[], build:[], branches:[]};
 async function replan(opts = {}){
-  // Branches hang off one scheme, so another target starts clean.
-  if (branchItem !== S.item) { if (branchItem !== null) S.branches = []; branchItem = S.item; }
   const my = ++seq;
+  if (!S.targets.length) {
+    // Branches hang off a scheme, so with nothing left to make they go too.
+    S.branches = [];
+    power = null;
+    setStatus('');
+    show(EMPTY_PLAN, opts);
+    return;
+  }
   try {
     await loadItems();
     const p = await api('/api/plan', request());
@@ -424,6 +437,7 @@ const isEnd = n => n.type === 'surplus';
 /* ---------- Layout: layered, left to right ---------- */
 function layout(){
   const {nodes, edges} = G;
+  if (!nodes.size) return;
   const core = [...nodes.values()].filter(n => !isEnd(n));
   // Break cycles walking upstream from the goal, main flows first, so by-product loops become the back edges.
   const state = new Map();
@@ -1233,62 +1247,80 @@ function bindCanvas(){
 }
 
 /* ---------- Controls ---------- */
-function setTarget(id, name){
-  S.item = id; S.itemName = name;
-  S.stock = []; S.choice = {}; S.overrides = {};
-  pins.clear(); panel = null;
-  syncControls();
-  replan({fit:true});
+function renderTargets(){
+  $('goalList').innerHTML = S.targets.map((x, i) => `<div class="row" data-i="${i}">${itemIcon(x.item, 18)}<span class="gn" title="${esc(nameOf(x.item))}">${esc(nameOf(x.item))}</span><input class="inp gper" type="number" min="0.01" step="any" value="${x.per}" aria-label="В минуту"><button class="rc x" aria-label="Убрать">&times;</button></div>`).join('')
+    || '<div class="note">Добавьте предмет. Можно сразу несколько: общие детали посчитаются вместе.</div>';
 }
 function syncControls(){
-  const name = S.itemName || nameOf(S.item);
-  $('search').value = name;
-  $('searchIcon').innerHTML = icon(S.item, name, 20);
-  $('per').value = S.per; $('rpm').value = S.rpm; $('belt').value = S.belt ?? ''; $('belt').placeholder = S.rpm; $('heat').checked = S.heat;
+  renderTargets();
+  $('rpm').value = S.rpm; $('belt').value = S.belt ?? ''; $('belt').placeholder = S.rpm; $('heat').checked = S.heat;
   document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.v === S.mode));
 }
 function bindControls(){
   const input = $('search'), box = $('sugg');
-  let timer = 0, list = [], active = 0;
+  let timer = 0, list = [], active = 0, numTimer = 0, searchSeq = 0;
+  const later = opts => { clearTimeout(numTimer); numTimer = setTimeout(() => replan(opts), 250); };
   const hide = () => { box.style.display = 'none'; };
+  const chosen = id => S.targets.some(x => x.item === id);
   const paint = () => {
-    box.innerHTML = list.map((it, i) => `<div class="${i === active ? 'on' : ''}" data-i="${i}">${icon(it.id, it.name, 20)}<span>${esc(it.name === it.id ? readable(it.id) : it.name)}</span><small>${esc(it.id.split(':')[0])}</small></div>`).join('');
+    box.innerHTML = list.map((it, i) => `<div class="${i === active ? 'on' : ''}" data-i="${i}">${icon(it.id, it.name, 20)}<span>${esc(it.name === it.id ? readable(it.id) : it.name)}</span><small>${chosen(it.id) ? 'добавлено' : esc(it.id.split(':')[0])}</small></div>`).join('');
     box.style.display = list.length ? 'block' : 'none';
     const on = box.querySelector('.on');
     if (on) on.scrollIntoView({block:'nearest'});
   };
+  // The list stays open so several items can be picked in a row, and a second click takes one back.
+  const toggle = it => {
+    if (chosen(it.id)) S.targets = S.targets.filter(x => x.item !== it.id);
+    else {
+      const per = parseFloat($('newPer').value);
+      if (!items.has(it.id)) items.set(it.id, it);
+      S.targets = [...S.targets, {item:it.id, per:per > 0 ? per : 60}];
+    }
+    renderTargets(); paint(); later({fit:true});
+  };
   // Names show in English, but a Russian query must still find the item.
   const query = q => {
     const url = lang => api(`/api/items?lang=${lang}&limit=14&q=${encodeURIComponent(q.trim())}`);
+    // A slow answer to an earlier query must not replace the results of a newer one.
+    const my = ++searchSeq;
     return Promise.all([url('en'), url('ru')]).then(([en, ru]) => {
+      if (my !== searchSeq) return;
       const seen = new Set(en.map(i => i.id));
       list = en.concat(ru.filter(i => !seen.has(i.id)).map(i => items.get(i.id) || i)).slice(0, 14);
       active = 0; paint();
     }).catch(() => { list = []; hide(); });
   };
-  input.addEventListener('focus', () => { input.select(); query(''); });
+  input.addEventListener('focus', () => query(input.value));
   input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => query(input.value), 130); });
   input.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown' && list.length) { active = (active + 1) % list.length; paint(); e.preventDefault(); }
     else if (e.key === 'ArrowUp' && list.length) { active = (active - 1 + list.length) % list.length; paint(); e.preventDefault(); }
-    else if (e.key === 'Enter' && list[active]) { const it = list[active]; hide(); input.blur(); setTarget(it.id, it.name); }
-    else if (e.key === 'Escape') { hide(); input.blur(); syncControls(); }
+    else if (e.key === 'Enter' && list[active]) toggle(list[active]);
+    else if (e.key === 'Escape') { input.value = ''; hide(); input.blur(); }
   });
   box.addEventListener('pointerdown', e => {
     const row = e.target.closest('[data-i]');
     if (!row) return;
     e.preventDefault();
-    const it = list[+row.dataset.i]; hide(); input.blur(); setTarget(it.id, it.name);
+    toggle(list[+row.dataset.i]);
   });
-  input.addEventListener('blur', () => { setTimeout(hide, 100); syncControls(); });
-  let numTimer = 0;
+  input.addEventListener('blur', () => setTimeout(hide, 100));
+  $('goalList').addEventListener('input', e => {
+    const row = e.target.closest('[data-i]'), v = parseFloat(e.target.value);
+    if (row && v > 0) { S.targets[+row.dataset.i].per = v; later(); }
+  });
+  $('goalList').addEventListener('click', e => {
+    if (!e.target.classList.contains('x')) return;
+    S.targets = S.targets.filter((_, i) => i !== +e.target.closest('[data-i]').dataset.i);
+    renderTargets(); later({fit:true});
+  });
   const num = (id, key) => $(id).addEventListener('input', e => {
     const v = parseFloat(e.target.value);
     if (!(v > 0)) return;
     S[key] = v;
     clearTimeout(numTimer); numTimer = setTimeout(() => replan(), 250);
   });
-  num('per', 'per'); num('rpm', 'rpm');
+  num('rpm', 'rpm');
   $('belt').addEventListener('input', e => {
     const v = parseFloat(e.target.value);
     S.belt = v > 0 ? v : null;
@@ -1297,7 +1329,7 @@ function bindControls(){
   $('mode').addEventListener('click', e => { const v = e.target.dataset.v; if (v && v !== S.mode) { S.mode = v; syncControls(); replan(); } });
   $('heat').addEventListener('change', e => { S.heat = e.target.checked; replan(); });
   $('totals').addEventListener('click', () => { if (panel && panel.kind === 'load') closePanel(); else { panel = {kind:'load'}; renderPanel(); } });
-  $('jeiBtn').addEventListener('click', () => { if (panel && panel.kind === 'item') closePanel(); else openItem(S.item, 'made'); });
+  $('jeiBtn').addEventListener('click', () => { if (panel && panel.kind === 'item') closePanel(); else openItem(S.targets.length ? S.targets[0].item : 'create:andesite_alloy', 'made'); });
   $('close').addEventListener('click', closePanel);
   addEventListener('keydown', e => { if (e.key === 'Escape' && panel && document.activeElement !== input) closePanel(); });
 }
@@ -1305,8 +1337,9 @@ function bindControls(){
 /* ---------- Start. The hash can preset a scenario: #item=...&per=...&rpm=...&mode=...&open=<node id>&panel=load ---------- */
 async function start(){
   const h = new URLSearchParams(location.hash.slice(1));
-  if (h.get('item')) S.item = h.get('item');
-  if (h.get('per')) S.per = +h.get('per');
+  // #item=a&per=60 for one target, #targets=a*60,b*30 for several.
+  if (h.get('item')) S.targets = [{item:h.get('item'), per:+h.get('per') || 60}];
+  if (h.get('targets')) S.targets = h.get('targets').split(',').map(x => { const [item, per] = x.split('*'); return {item, per:+per || 60}; });
   if (h.get('rpm')) S.rpm = +h.get('rpm');
   if (h.get('mode')) S.mode = h.get('mode');
   if (h.get('heat') === '0') S.heat = false;

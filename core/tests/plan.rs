@@ -474,3 +474,34 @@ fn consumers_see_through_tags() {
     let ids: Vec<&str> = consumers(&cat, "gravel", &Default::default()).iter().map(|r| r.id.as_str()).collect();
     assert_eq!(ids, ["wash", "mill_flint"]);
 }
+
+fn targets(list: &[(&str, f64)]) -> PlanRequest {
+    PlanRequest { targets: list.iter().map(|(item, per_minute)| Target { item: item.to_string(), per_minute: *per_minute }).collect(), ..Default::default() }
+}
+
+#[test]
+fn several_targets_share_their_inputs() {
+    let cat = catalog();
+    // A sheet and a cog each take one iron, so one line of iron serves both.
+    let p = plan(&cat, &targets(&[("sheet", 60.0), ("cog", 30.0)])).unwrap();
+    close(gathered(&p, "raw_iron"), 90.0);
+    close(runs(&p, "smelt_crushed"), 90.0);
+    close(runs(&p, "cheap_sheet"), 60.0);
+    close(runs(&p, "cog"), 30.0);
+    assert_eq!(p.nodes.iter().filter(|n| matches!(n.kind, NodeKind::Target { .. })).count(), 2);
+}
+
+#[test]
+fn a_target_can_be_an_input_of_another() {
+    // Iron is both asked for and needed for sheets.
+    let p = plan(&catalog(), &targets(&[("sheet", 60.0), ("iron", 40.0)])).unwrap();
+    close(runs(&p, "smelt_crushed"), 100.0);
+    close(gathered(&p, "raw_iron"), 100.0);
+}
+
+#[test]
+fn the_same_item_twice_adds_up_to_one_end() {
+    let p = plan(&catalog(), &targets(&[("sheet", 60.0), ("sheet", 40.0)])).unwrap();
+    close(runs(&p, "cheap_sheet"), 100.0);
+    assert_eq!(p.nodes.iter().filter(|n| n.id == "target:sheet").count(), 1);
+}

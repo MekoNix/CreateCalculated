@@ -122,3 +122,17 @@ fn arrows_use_up_the_flint_from_washing_gravel() {
     });
     assert_eq!(wash, Some("minecraft:iron_nugget"));
 }
+
+#[test]
+fn several_targets_use_each_others_leftovers() {
+    let Some(cat) = catalog() else { return };
+    let req = PlanRequest {
+        targets: vec![Target { item: "minecraft:iron_ingot".into(), per_minute: 60.0 }, Target { item: "minecraft:arrow".into(), per_minute: 240.0 }],
+        mode: Mode::FullAuto,
+        ..Default::default()
+    };
+    let p = plan(&cat, &req).unwrap();
+    // Arrows take flint from washing gravel for the iron, so no gravel is milled for them.
+    assert!(!p.nodes.iter().any(|n| matches!(&n.kind, NodeKind::Recipe { recipe, .. } if recipe == "create:milling/gravel")));
+    assert!(p.edges.iter().any(|e| e.res == "minecraft:flint" && e.to == "recipe:minecraft:arrow" && e.from == "recipe:create:splashing/gravel"));
+}

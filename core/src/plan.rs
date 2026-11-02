@@ -723,10 +723,15 @@ fn build_plan(cat: &Catalog, req: &PlanRequest, solved: Solved, stock: &HashSet<
         nodes.push(Node { id: id.clone(), kind: NodeKind::Surplus { res: res.clone(), per_minute: v } });
         consumers.entry(res.clone()).or_default().push((id, v));
     }
+    // The same item asked for twice is one end of the graph.
+    let mut wanted: BTreeMap<&ResId, f64> = BTreeMap::new();
     for t in &req.targets {
-        let id = format!("target:{}", t.item);
-        nodes.push(Node { id: id.clone(), kind: NodeKind::Target { res: t.item.clone(), per_minute: t.per_minute } });
-        consumers.entry(t.item.clone()).or_default().push((id, t.per_minute));
+        *wanted.entry(&t.item).or_default() += t.per_minute;
+    }
+    for (item, per_minute) in wanted {
+        let id = format!("target:{item}");
+        nodes.push(Node { id: id.clone(), kind: NodeKind::Target { res: item.clone(), per_minute } });
+        consumers.entry(item.clone()).or_default().push((id, per_minute));
     }
     for ((tag, member), &v) in &solved.conversions {
         if v <= EPS {
