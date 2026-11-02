@@ -86,3 +86,11 @@ fn leftovers_are_kept_rather_than_destroyed_in_a_loop() {
     assert!(!p.nodes.iter().any(|n| n.id.contains("granite")), "{:?}", p.nodes.iter().map(|n| &n.id).collect::<Vec<_>>());
     assert!(p.nodes.iter().any(|n| matches!(&n.kind, NodeKind::Surplus { res, .. } if res == "minecraft:flint")));
 }
+
+#[test]
+fn full_auto_mines_rather_than_conjures_a_potion() {
+    let Some(cat) = catalog() else { return };
+    let p = auto(&cat, "minecraft:redstone");
+    assert!(p.manual.iter().all(|m| !m.contains("potion")), "{:?}", p.manual);
+    assert_eq!(gathered(&p), ["minecraft:redstone"]);
+}

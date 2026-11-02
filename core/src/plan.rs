@@ -341,7 +341,8 @@ fn raw_costs(cat: &Catalog, recipes: &BTreeSet<usize>, resources: &BTreeSet<ResI
             // Stripping is extra work, so plain logs win when a recipe accepts both.
             let stripped = if r.contains(":stripped_") { STRIPPED_RAW_COST } else { 1.0 };
             let price = match (base.get(r), mode) {
-                (None, _) => UNUSUAL_RAW_COST,
+                // Not scaled for fluids: a potion nobody can make must not beat digging for redstone.
+                (None, _) => return (r.clone(), UNUSUAL_RAW_COST),
                 (Some(_), Mode::Normal) => stripped,
                 (Some(Origin::Generator), Mode::FullAuto) => AUTO_GENERATOR_COST,
                 (Some(Origin::Farm), Mode::FullAuto) => AUTO_FARM_COST * stripped,
