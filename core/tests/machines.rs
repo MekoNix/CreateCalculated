@@ -6,10 +6,11 @@ use createcalc_core::model::RecipeKind;
 
 #[test]
 fn press_cycle() {
-    // speed (int)lerp(0.5, 1, 60) = 30: 4 ticks to 120, 5 to pass 240, 1 to finish.
-    assert_eq!(press_ticks(256.0), 10);
-    // speed (int)lerp(0.125, 1, 60) = 8: 15 ticks to 120, 16 to pass 240, 1 to finish.
-    assert_eq!(press_ticks(64.0), 32);
+    // speed (int)lerp(0.5, 1, 60) = 30: 4 ticks to 120, 5 to pass 240, 1 to finish, 1 to restart.
+    // 11 matches the measurement in the game.
+    assert_eq!(press_ticks(256.0), 11);
+    // speed (int)lerp(0.125, 1, 60) = 8: 15 ticks to 120, 16 to pass 240, 1 to finish, 1 to restart.
+    assert_eq!(press_ticks(64.0), 33);
 }
 
 #[test]
@@ -86,10 +87,10 @@ fn fan_time_steps_every_16_items() {
 #[test]
 fn stress_counts_every_block() {
     let cfg = Config::default();
-    // 60 runs a minute on a press at 256 RPM: 1 per 20 ticks, cycle 10, so half a press.
+    // 60 runs a minute on a press at 256 RPM: 1 per 20 ticks, cycle 11.
     let press = size(Machine::Press, RecipeKind::Pressing, 0, 0, 256.0, 1, 60.0, &cfg);
     assert_eq!(press.count, 1);
-    assert!((press.exact - 0.5).abs() < 1e-9);
+    assert!((press.exact - 0.55).abs() < 1e-9);
     assert_eq!(press.su, 8.0 * 256.0);
     // Crushing wheels work in pairs.
     let wheels = size(Machine::CrushingWheels, RecipeKind::Crushing, 400, 0, 256.0, 1, 50.0, &cfg);

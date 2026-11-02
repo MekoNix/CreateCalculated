@@ -101,7 +101,9 @@ pub fn step_machine(kind: RecipeKind) -> Machine {
     }
 }
 
-/// `PressingBehaviour.getRunningTickSpeed` and the cycle in `PressingBehaviour.tick`.
+/// `PressingBehaviour.getRunningTickSpeed` and the cycle in `PressingBehaviour.tick`, plus
+/// one tick to start the next cycle. Measured in the game on a belt at 256 RPM: 109 items
+/// in 1200 ticks, 11 ticks per item, where the code alone gives 10.
 pub fn press_ticks(rpm: f64) -> u32 {
     const CYCLE: i64 = 240;
     let t = (rpm.abs() as f32 / 512.0).clamp(0.0, 1.0);
@@ -110,7 +112,7 @@ pub fn press_ticks(rpm: f64) -> u32 {
     loop {
         ticks += 1;
         if running > CYCLE {
-            return ticks;
+            return ticks + 1;
         }
         let prev = running;
         running += speed;
