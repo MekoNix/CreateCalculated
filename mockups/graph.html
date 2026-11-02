@@ -110,6 +110,21 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 #side .seg button{padding:0 8px}
 .btn.file{display:inline-flex;align-items:center;font-size:12px}
 .btn.file input{display:none}
+.inp.wide{width:100%;margin-top:8px}
+.seg.wide{display:flex;margin-top:8px}
+.seg.wide button{flex:1;padding:0 4px;font-size:11.5px}
+.rcp{border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin-top:6px;background:var(--card)}
+.rcp[hidden]{display:none}
+.rl{display:flex;justify-content:space-between;align-items:center;min-height:24px;gap:6px}
+.rf{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:3px}
+.rf .ar{color:var(--dim)}
+.chip{display:inline-flex;align-items:center;gap:3px;font-size:11.5px}
+.go{cursor:pointer}
+.chip.go:hover,.row.go:hover{color:var(--blue)}
+.btn.sm{height:22px;padding:0 7px;font-size:11px}
+.addf{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+.addf .inp{flex:1;min-width:120px;height:24px}
+.rc.x{align-self:center;font-size:14px;padding:0 0 0 6px}
 #status{position:fixed;left:12px;bottom:10px;color:var(--dim);z-index:3;max-width:60%}
 #status.err{color:var(--red)}
 #zoom{position:fixed;left:12px;bottom:32px;display:flex;gap:4px;z-index:3;align-items:center;color:var(--dim)}
@@ -124,9 +139,11 @@ input[type=number]::-webkit-inner-spin-button{display:none}
   <label class="fld"><input id="per" class="inp" type="number" min="0.01" step="any" style="width:64px"> в минуту</label>
   <label class="fld"><input id="rpm" class="inp" type="number" min="1" step="any" style="width:58px"> RPM</label>
   <div class="seg" id="mode"><button data-v="normal">Обычный</button><button data-v="full_auto">Полная автоматизация</button></div>
+  <button id="jeiBtn" class="btn">Рецепты</button>
   <button id="totals" title="Нагрузка и здания"></button>
 </header>
 <aside id="side">
+  <details id="sBr" open hidden><summary>Отростки</summary><div class="sb" id="brBody"></div></details>
   <details id="sMat" open><summary>Материалы</summary><div class="sb">
     <h3>Что построить</h3><div id="matBuild"></div>
     <h3>Материалы на всю постройку</h3><div id="matRaw"></div>
@@ -166,7 +183,7 @@ const SNAP = /*SNAP*/{"plan":{"nodes":[{"id":"recipe:create:compacting/andesite_
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-const S = {batch:1, stack:1, sails:64, config:null, belt:null, stacks:{}, item:'create:andesite_alloy', itemName:'', per:60, rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
+const S = {branches:[], batch:1, stack:1, sails:64, config:null, belt:null, stacks:{}, item:'create:andesite_alloy', itemName:'', per:60, rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
 const items = new Map();
 const recipes = new Map();
 let itemsLoaded = false, plan = null, power = null, offline = false, seq = 0;
@@ -254,13 +271,16 @@ function loadRecipe(id){
   return api('/api/recipes/' + encodeURI(id)).then(r => (recipes.set(id, r), r));
 }
 function request(){
-  return {targets:[{item:S.item, per_minute:S.per}], rpm:S.rpm, mode:S.mode, include_heat:S.heat, stock:S.stock, recipe_choice:S.choice, overrides:S.overrides, belt_rpm:S.belt, stack_sizes:S.stacks, batch:S.batch, stack:S.stack, ...(S.config ? {config:S.config} : {})};
+  return {targets:[{item:S.item, per_minute:S.per}], rpm:S.rpm, mode:S.mode, include_heat:S.heat, stock:S.stock, recipe_choice:S.choice, overrides:S.overrides, belt_rpm:S.belt, stack_sizes:S.stacks, branches:S.branches, batch:S.batch, stack:S.stack, ...(S.config ? {config:S.config} : {})};
 }
 const mainRes = r => r && r.outputs[0] ? r.outputs[0].res : null;
 const outputRate = (n, r, res) => n.runs_per_min * r.outputs.filter(o => o.res === res).reduce((s, o) => s + o.amount * o.chance, 0);
 const nodeRes = n => n.type === 'recipe' ? (n.produces || mainRes(recipes.get(n.recipe))) : n.res;
 
+let branchItem = null;
 async function replan(opts = {}){
+  // Branches hang off one scheme, so another target starts clean.
+  if (branchItem !== S.item) { if (branchItem !== null) S.branches = []; branchItem = S.item; }
   const my = ++seq;
   try {
     await loadItems();
@@ -308,6 +328,7 @@ function show(p, opts){
   }
   renderPanel();
   renderMaterials();
+  renderBranches();
   if (opts.fit) fit();
   document.querySelectorAll('.node').forEach(el => el.classList.toggle('sel', !!panel && panel.id === el.dataset.id));
 }
@@ -676,6 +697,7 @@ function recipeLabel(id){
 function nodePanel(n){
   let h = `<div class="ph">${itemIcon(n.res, 28)}<div><h2>${esc(nameOf(n.res))}</h2><div style="color:var(--blue)">${rateText(n.res, n.rate)}</div></div></div>`;
   const ins = n.ins, outs = n.outs;
+  h += `<div class="btns"><button class="btn" id="pJei">Рецепты предмета</button></div>`;
   if (n.type === 'recipe') {
     const over = S.overrides[n.recipe] || {};
     const opts = [n.recipe, ...n.alternatives];
@@ -719,6 +741,7 @@ function renderPanel(){
   renderTotals();
   document.querySelectorAll('.node').forEach(c => c.classList.toggle('sel', !!panel && panel.id === c.dataset.id));
   if (!panel || !plan) return;
+  if (panel.kind === 'item') { renderItemPanel(); return; }
   if (panel.kind === 'edge') {
     const e = G.edges.find(x => edgeKey(x) === panel.key);
     if (!e) { panel = null; el.classList.remove('open'); return; }
@@ -746,6 +769,7 @@ function setOverride(recipe, key, value){
 }
 function bindNodePanel(n){
   const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
+  on('pJei', 'click', () => openItem(n.res, n.type === 'surplus' ? 'uses' : 'made'));
   on('pRecipe', 'change', e => { S.choice[n.res] = e.target.value; replan(); });
   on('pMachine', 'change', e => setOverride(n.recipe, 'machine', e.target.value));
   on('pRpm', 'change', e => { const v = parseFloat(e.target.value); setOverride(n.recipe, 'rpm', v > 0 ? v : null); });
@@ -771,6 +795,8 @@ function bindNodePanel(n){
 function openNode(id, focusRecipe){
   const n = G.nodes.get(id);
   if (!n) return;
+  // A leftover is mostly a question of what it could become.
+  if (n.type === 'surplus') { openItem(n.res, 'uses'); return; }
   panel = {kind:'node', id, res:n.res};
   renderPanel();
   const r = n.el.getBoundingClientRect(), limit = innerWidth - 340 - 16;
@@ -778,6 +804,106 @@ function openNode(id, focusRecipe){
   if (focusRecipe && $('pRecipe')) $('pRecipe').focus();
 }
 function closePanel(){ panel = null; renderPanel(); }
+
+/* ---------- Recipe browser, like JEI ---------- */
+const recipeLists = new Map();
+async function recipeList(kind, item){
+  const key = kind + '|' + item;
+  if (!recipeLists.has(key)) {
+    const list = await api(`/api/${kind}?item=${encodeURIComponent(item)}`);
+    list.forEach(r => recipes.set(r.id, r));
+    recipeLists.set(key, list);
+  }
+  return recipeLists.get(key);
+}
+function openItem(res, tab){ panel = {kind:'item', res, tab, add:null}; renderPanel(); }
+const leftover = res => plan.nodes.filter(n => n.type === 'surplus' && n.res === res).reduce((s, n) => s + n.per_minute, 0);
+// A tag has no single item to open, so it stays a label.
+const realItem = res => res;
+function chip(res, amount){
+  const id = realItem(res);
+  const title = res.startsWith('#') ? res : nameOf(res);
+  const clickable = !res.startsWith('#');
+  return `<span class="chip${clickable ? ' go' : ''}"${clickable ? ` data-res="${esc(id)}"` : ''} title="${esc(title)}">${itemIcon(id, 18)}<span>${fmt(amount)}</span></span>`;
+}
+function recipeRow(r, tab, res){
+  const outs = r.outputs.map(o => chip(o.res, o.amount * o.chance)).join('');
+  const ins = r.inputs.map(s => chip(s.res, s.amount)).join('');
+  const search = (r.id + ' ' + r.inputs.concat(r.outputs).map(x => nameOf(x.res)).join(' ')).toLowerCase();
+  const mine = plan.nodes.some(n => n.recipe === r.id);
+  let act = '';
+  if (tab === 'made') act = mine ? '<span class="d">уже в схеме</span>' : `<button class="btn sm" data-use="${esc(r.id)}">Использовать</button>`;
+  else if (mine) act = '<span class="d">уже в схеме</span>';
+  else act = `<button class="btn sm" data-add="${esc(r.id)}">В схему</button>`;
+  let form = '';
+  if (tab === 'uses' && panel.add === r.id) {
+    const left = leftover(res);
+    form = `<div class="addf"><input id="iPer" class="inp" type="number" min="0.01" step="any" placeholder="${esc(nameOf(mainRes(r)))} в минуту"><button class="btn sm" id="iAdd">Добавить</button><button class="btn sm" id="iAll"${left > 1e-6 ? '' : ' disabled'} title="${left > 1e-6 ? 'В остатке ' + fmt(left) + '/мин' : 'Остатка этого предмета нет'}">Весь остаток</button></div>`;
+  }
+  return `<div class="rcp" data-search="${esc(search)}"><div class="rl"><span class="d">${esc(KIND[r.kind] || r.kind)}</span>${act}</div><div class="rf">${ins}<span class="ar">&rarr;</span>${outs}</div>${form}</div>`;
+}
+async function renderItemPanel(){
+  const p = panel, body = $('panelBody');
+  const tab = t => `<button data-t="${t}"${p.tab === t ? ' class="on"' : ''}>${t === 'made' ? 'Из чего делается' : 'Для чего используется'}</button>`;
+  body.innerHTML = `<div class="ph">${itemIcon(p.res, 28)}<div><h2>${esc(nameOf(p.res))}</h2></div></div>
+    <input id="iItem" class="inp wide" placeholder="Другой предмет" autocomplete="off" spellcheck="false"><div id="iSugg"></div>
+    <div class="seg wide" id="iTabs">${tab('made')}${tab('uses')}</div>
+    <input id="iFilter" class="inp wide" placeholder="Поиск по рецептам" autocomplete="off" spellcheck="false">
+    <div id="iList"><div class="note">Загрузка...</div></div>`;
+  $('iTabs').addEventListener('click', e => { const v = e.target.dataset.t; if (v) { panel.tab = v; panel.add = null; renderItemPanel(); } });
+  let timer;
+  $('iItem').addEventListener('input', e => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const q = e.target.value.trim();
+      if (!q) { $('iSugg').innerHTML = ''; return; }
+      const found = await api(`/api/items?q=${encodeURIComponent(q)}&lang=en&limit=8`).catch(() => []);
+      found.forEach(i => { if (!items.has(i.id)) items.set(i.id, i); });
+      if (panel !== p) return;
+      $('iSugg').innerHTML = found.map(i => `<div class="row go" data-res="${esc(i.id)}">${itemIcon(i.id, 18)}<span>${esc(i.name)}</span></div>`).join('');
+    }, 130);
+  });
+  $('iSugg').addEventListener('click', e => { const el = e.target.closest('[data-res]'); if (el) openItem(el.dataset.res, panel.tab); });
+  $('iFilter').addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('#iList .rcp').forEach(el => { el.hidden = !!q && !el.dataset.search.includes(q); });
+  });
+  let list;
+  try { list = await recipeList(p.tab === 'made' ? 'producers' : 'consumers', p.res); }
+  catch (e) { if (panel === p) $('iList').innerHTML = `<div class="note">${e.http ? esc(e.message) : 'Нужен запущенный сервер.'}</div>`; return; }
+  if (panel !== p) return;
+  const empty = p.tab === 'made' ? 'Рецепта нет: это сырьё.' : 'Ни в одном рецепте не используется.';
+  const left = leftover(p.res);
+  const head = left > 1e-6 ? `<div class="note warn">В остатке ${fmt(left)}/мин: можно пустить в новую ветку.</div>` : '';
+  $('iList').innerHTML = head + (list.map(r => recipeRow(r, p.tab, p.res)).join('') || `<div class="note">${empty}</div>`);
+  $('iList').addEventListener('click', e => {
+    const go = e.target.closest('[data-res]');
+    if (go) { openItem(go.dataset.res, panel.tab); return; }
+    const use = e.target.closest('[data-use]');
+    if (use) { S.choice[p.res] = use.dataset.use; S.stock = S.stock.filter(r => r !== p.res); replan(); return; }
+    const add = e.target.closest('[data-add]');
+    if (add) { panel.add = panel.add === add.dataset.add ? null : add.dataset.add; renderItemPanel(); return; }
+    if (e.target.id === 'iAll') { addBranch(null); return; }
+    if (e.target.id === 'iAdd') { const v = parseFloat($('iPer').value); if (v > 0) addBranch(v); }
+  });
+}
+function addBranch(perMinute){
+  S.branches = [...S.branches, {recipe:panel.add, input:panel.res, per_minute:perMinute}];
+  panel.add = null;
+  replan();
+}
+function renderBranches(){
+  const box = $('sBr');
+  box.hidden = !S.branches.length;
+  if (!S.branches.length) return;
+  const done = (plan && plan.branches) || [];
+  $('brBody').innerHTML = S.branches.map((b, i) => {
+    const r = recipes.get(b.recipe), hit = done.find(d => d.recipe === b.recipe), item = hit ? hit.item : mainRes(r);
+    const rate = hit ? fmt(hit.per_minute) + '/мин' : 'нет остатка';
+    return `<div class="row">${itemIcon(item, 18)}<span>${esc(nameOf(item))}</span><span class="d">${b.per_minute ? '' : 'весь остаток'}</span><span class="v">${rate}</span><button class="rc x" data-i="${i}" aria-label="Убрать">&times;</button></div>`;
+  }).join('');
+}
+
 const buildRow = (id, count) => `<div class="row">${itemIcon(id, 18)}<span>${esc(nameOf(id))}</span><span class="v p">${fmt(count)}</span></div>`;
 let matSeq = 0, matList = [];
 // One minute of a plan at these rates is the whole list; it stops at ingots rather than ore.
@@ -820,6 +946,7 @@ function syncSettings(){
   $('cCrafter').checked = c.allow_regular_crafting_in_crafter; $('cStone').checked = c.allow_stonecutting_on_saw;
 }
 function bindSide(){
+  $('brBody').addEventListener('click', e => { const i = e.target.dataset.i; if (i !== undefined) { S.branches = S.branches.filter((_, k) => k !== +i); replan(); } });
   $('sMat').addEventListener('toggle', () => { if ($('sMat').open) renderMaterials(); });
   $('bCopy').addEventListener('click', async () => {
     const text = materialsText();
@@ -994,6 +1121,7 @@ function bindControls(){
   $('mode').addEventListener('click', e => { const v = e.target.dataset.v; if (v && v !== S.mode) { S.mode = v; syncControls(); replan(); } });
   $('heat').addEventListener('change', e => { S.heat = e.target.checked; replan(); });
   $('totals').addEventListener('click', () => { if (panel && panel.kind === 'load') closePanel(); else { panel = {kind:'load'}; renderPanel(); } });
+  $('jeiBtn').addEventListener('click', () => { if (panel && panel.kind === 'item') closePanel(); else openItem(S.item, 'made'); });
   $('close').addEventListener('click', closePanel);
   addEventListener('keydown', e => { if (e.key === 'Escape' && panel && document.activeElement !== input) closePanel(); });
 }
