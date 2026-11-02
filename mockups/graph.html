@@ -132,8 +132,9 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 .go{cursor:pointer}
 .chip.go:hover,.row.go:hover{color:var(--blue)}
 .btn.sm{height:22px;padding:0 7px;font-size:11px}
-.addf{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
-.addf .inp{flex:1;min-width:120px;height:24px}
+.qty{display:flex;gap:6px;flex-wrap:wrap}
+.qty .inp{flex:1;min-width:120px}
+.qty .btn.on{border-color:var(--gold);color:var(--gold)}
 .rc.x{align-self:center;font-size:14px;padding:0 0 0 6px}
 #status{position:fixed;left:12px;bottom:10px;color:var(--dim);z-index:3;max-width:60%}
 #status.err{color:var(--red)}
@@ -842,15 +843,11 @@ function recipeRow(r, tab, res){
   const ins = r.inputs.map(s => chip(s.res, s.amount)).join('');
   const search = (r.id + ' ' + r.inputs.concat(r.outputs).map(x => nameOf(x.res)).join(' ')).toLowerCase();
   const mine = plan.nodes.some(n => n.recipe === r.id);
-  let act = '', form = '';
+  let act = '';
   if (tab === 'made') act = mine ? '<span class="d">уже в схеме</span>' : `<button class="btn sm" data-use="${esc(r.id)}">Использовать</button>`;
-  else {
-    if (mine) act = '<span class="d">уже в схеме</span>';
-    const left = leftover(res);
-    form = `<div class="addf" data-recipe="${esc(r.id)}"><input class="inp iPer" type="number" min="0.01" step="any" placeholder="${isFluid(mainRes(r)) ? 'мБ' : 'шт'} в минуту" aria-label="Количество в минуту"><button class="btn sm iAdd">Добавить</button><button class="btn sm iAll"${left > 1e-6 ? '' : ' disabled'} title="${left > 1e-6 ? 'В остатке ' + fmt(left) + '/мин' : 'Остатка этого предмета нет'}">Весь остаток</button></div>`;
-  }
-    const others = r.outputs.length > 1 ? ` <span class="d">+${r.outputs.length - 1}</span>` : '';
-  return `<div class="rcp" data-search="${esc(search)}"><div class="rl"><span class="rt"><span class="rn">${esc(nameOf(mainRes(r)))}</span>${others}<span class="d rk">${esc(KIND[r.kind] || r.kind)}</span></span>${act}</div><div class="rf">${ins}<span class="ar">&rarr;</span>${outs}</div>${form}</div>`;
+  else act = (mine ? '<span class="d">уже в схеме</span> ' : '') + `<button class="btn sm" data-add="${esc(r.id)}">В схему</button>`;
+  const others = r.outputs.length > 1 ? ` <span class="d">+${r.outputs.length - 1}</span>` : '';
+  return `<div class="rcp" data-search="${esc(search)}"><div class="rl"><span class="rt"><span class="rn">${esc(nameOf(mainRes(r)))}</span>${others}<span class="d rk">${esc(KIND[r.kind] || r.kind)}</span></span>${act}</div><div class="rf">${ins}<span class="ar">&rarr;</span>${outs}</div></div>`;
 }
 async function renderItemPanel(){
   const p = panel, body = $('panelBody');
@@ -886,28 +883,58 @@ async function renderItemPanel(){
   const left = leftover(p.res);
   const head = left > 1e-6 ? `<div class="note warn">В остатке ${fmt(left)}/мин: можно пустить в новую ветку.</div>` : '';
   $('iList').innerHTML = head + (list.map(r => recipeRow(r, p.tab, p.res)).join('') || `<div class="note">${empty}</div>`);
-  $('iList').addEventListener('keydown', e => {
-    if (e.key !== 'Enter' || !e.target.classList.contains('iPer')) return;
-    const v = parseFloat(e.target.value);
-    if (v > 0) addBranch(e.target.closest('.addf').dataset.recipe, v);
-  });
   $('iList').addEventListener('click', e => {
     const go = e.target.closest('[data-res]');
     if (go) { openItem(go.dataset.res, panel.tab); return; }
     const use = e.target.closest('[data-use]');
     if (use) { confirmChange(() => { S.choice[p.res] = use.dataset.use; S.stock = S.stock.filter(r => r !== p.res); }); return; }
-    const form = e.target.closest('.addf');
-    if (!form) return;
-    if (e.target.classList.contains('iAll')) { addBranch(form.dataset.recipe, null); return; }
-    if (e.target.classList.contains('iAdd')) {
-      const input = form.querySelector('.iPer'), v = parseFloat(input.value);
-      if (v > 0) addBranch(form.dataset.recipe, v); else input.focus();
-    }
+    const add = e.target.closest('[data-add]');
+    if (add) askBranch(add.dataset.add, p.res);
   });
 }
-function addBranch(recipe, perMinute){
-  const branch = {recipe, input:panel.res, per_minute:perMinute};
-  confirmChange(() => { S.branches = [...S.branches, branch]; });
+// Picks how much of a recipe to hang off the scheme. The window shows what it would cost as you type.
+function askBranch(recipe, input){
+  const r = recipes.get(recipe), main = mainRes(r), left = leftover(input);
+  const unit = isFluid(main) ? 'мБ' : 'шт';
+  // With leftovers around, taking all of them is what the click most likely means.
+  let useAll = left > 1e-6, seq = 0, timer;
+  $('askBox').innerHTML = `<h2>${esc(nameOf(main))}</h2><div class="note">${esc(KIND[r.kind] || r.kind)}, из ${esc(nameOf(input))}</div>
+    <h3>Сколько в минуту</h3>
+    <div class="qty"><input id="dPer" class="inp" type="number" min="0.01" step="any" placeholder="${unit} в минуту" aria-label="Количество в минуту"><button class="btn" id="dAll"${left > 1e-6 ? '' : ' disabled'}>Весь остаток${left > 1e-6 ? ' (' + fmt(left) + ' ' + esc(nameOf(input)) + ')' : ''}</button></div>
+    <div id="dPreview"></div>
+    <div class="btns"><button class="btn" id="askNo">Отмена</button><button class="btn yes" id="askYes" disabled>Добавить</button></div>`;
+  $('ask').hidden = false;
+  const close = () => { clearTimeout(timer); seq++; $('ask').hidden = true; removeEventListener('keydown', key); };
+  const key = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  addEventListener('keydown', key);
+  const rate = () => { const v = parseFloat($('dPer').value); return v > 0 ? v : null; };
+  const valid = () => useAll || rate() !== null;
+  const branch = () => ({recipe, input, per_minute:useAll ? null : rate()});
+  const refresh = async () => {
+    const yes = $('askYes');
+    yes.disabled = !valid();
+    $('dAll').classList.toggle('on', useAll);
+    const my = ++seq;
+    if (!valid() || !S.ask) { $('dPreview').innerHTML = ''; return; }
+    try {
+      const p = await api('/api/plan', {...request(), branches:[...S.branches, branch()]});
+      if (my !== seq) return;
+      const done = p.branches[p.branches.length - 1];
+      const made = done ? `<div class="row"><span>Получится</span><span class="v">${rateText(main, done.per_minute)}</span></div>` : '';
+      $('dPreview').innerHTML = made + diffHtml(planDiff(plan, p));
+    } catch (e) {
+      if (my !== seq) return;
+      yes.disabled = true;
+      $('dPreview').innerHTML = `<div class="note warn">${e.http ? esc(e.message) : 'Сервер недоступен.'}</div>`;
+    }
+  };
+  $('dPer').addEventListener('input', () => { useAll = false; clearTimeout(timer); timer = setTimeout(refresh, 200); $('askYes').disabled = !valid(); $('dAll').classList.remove('on'); });
+  $('dPer').addEventListener('keydown', e => { if (e.key === 'Enter' && !$('askYes').disabled) $('askYes').click(); });
+  $('dAll').addEventListener('click', () => { useAll = true; $('dPer').value = ''; refresh(); });
+  $('askNo').onclick = close;
+  $('askYes').onclick = () => { const b = branch(); close(); S.branches = [...S.branches, b]; replan(); };
+  refresh();
+  $('dPer').focus();
 }
 // What a change would do to the raw resources and the stress, compared with the current plan.
 function planDiff(before, after){
@@ -922,13 +949,16 @@ function planDiff(before, after){
   const gone = [...was].filter(([r]) => !now.has(r));
   return {added, changed, gone, suBefore:before.total_su, suAfter:after.total_su, any:added.length + changed.length + gone.length > 0 || Math.abs(before.total_su - after.total_su) > 1e-6};
 }
-function askConfirm(d){
+function diffHtml(d){
   const rows = list => list.map(([r, v]) => `<div class="row">${itemIcon(r, 18)}<span>${esc(nameOf(r))}</span><span class="v">${rateText(r, v)}</span></div>`).join('');
-  let h = `<h2>Схема будет пересчитана</h2>`;
+  let h = '';
   if (d.added.length) h += `<h3>Новые ресурсы</h3>${rows(d.added)}`;
   if (d.changed.length) h += `<h3>Изменится</h3>` + d.changed.map(([r, a, b]) => `<div class="row">${itemIcon(r, 18)}<span>${esc(nameOf(r))}</span><span class="d">${rateText(r, a)}</span><span class="v">${rateText(r, b)}</span></div>`).join('');
   if (d.gone.length) h += `<h3>Больше не нужно</h3>${rows(d.gone)}`;
-  h += `<h3>Нагрузка</h3><div class="row"><span>${fmt(d.suBefore)} SU</span><span class="v p">${fmt(d.suAfter)} SU</span></div>`;
+  return h + `<h3>Нагрузка</h3><div class="row"><span>${fmt(d.suBefore)} SU</span><span class="v p">${fmt(d.suAfter)} SU</span></div>`;
+}
+function askConfirm(d){
+  let h = `<h2>Схема будет пересчитана</h2>` + diffHtml(d);
   h += `<div class="btns"><button class="btn" id="askNo">Отмена</button><button class="btn yes" id="askYes">Да</button></div>`;
   $('askBox').innerHTML = h;
   $('ask').hidden = false;
