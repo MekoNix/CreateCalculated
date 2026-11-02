@@ -116,6 +116,16 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 .rcp{border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin-top:6px;background:var(--card)}
 .rcp[hidden]{display:none}
 .rl{display:flex;justify-content:space-between;align-items:center;min-height:24px;gap:6px}
+.rt{min-width:0}
+.rn{font-weight:600;font-size:12.5px}
+.rk{display:block}
+#ask{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:20}
+#ask[hidden]{display:none}
+#askBox{width:420px;max-width:calc(100vw - 32px);max-height:calc(100vh - 80px);overflow:auto;background:#17191d;border:1px solid var(--line2);border-radius:8px;padding:14px 16px}
+#askBox h2{font-size:14px;margin:0 0 4px}
+#askBox h3{font-size:11px;font-weight:400;color:var(--dim);margin:12px 0 4px}
+#askBox .btns{justify-content:flex-end}
+.btn.yes{background:#2d4a33;border-color:#3f6b49}
 .rf{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:3px}
 .rf .ar{color:var(--dim)}
 .chip{display:inline-flex;align-items:center;gap:3px;font-size:11.5px}
@@ -142,6 +152,7 @@ input[type=number]::-webkit-inner-spin-button{display:none}
   <button id="jeiBtn" class="btn">Рецепты</button>
   <button id="totals" title="Нагрузка и здания"></button>
 </header>
+<div id="ask" hidden><div id="askBox" role="dialog" aria-modal="true"></div></div>
 <aside id="side">
   <details id="sBr" open hidden><summary>Отростки</summary><div class="sb" id="brBody"></div></details>
   <details id="sMat" open><summary>Материалы</summary><div class="sb">
@@ -153,6 +164,7 @@ input[type=number]::-webkit-inner-spin-button{display:none}
   <details id="sSet"><summary>Настройки</summary><div class="sb">
     <h3>Схема</h3>
     <label class="chk line"><input id="heat" type="checkbox"> Нагрев: бёрнеры и топливо</label>
+    <label class="chk line"><input id="cAsk" type="checkbox"> Спрашивать перед сменой рецепта</label>
     <label class="fld line"><span>RPM лент</span><input id="belt" class="inp" type="number" min="1" step="any"></label>
     <div class="fld line"><span title="Для дробилки и вентилятора">Партия машин</span><div class="seg" id="dBatch"></div></div>
     <div class="fld line"><span>Стопка на ленте</span><div class="seg" id="dStack"></div></div>
@@ -183,7 +195,7 @@ const SNAP = /*SNAP*/{"plan":{"nodes":[{"id":"recipe:create:compacting/andesite_
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-const S = {branches:[], batch:1, stack:1, sails:64, config:null, belt:null, stacks:{}, item:'create:andesite_alloy', itemName:'', per:60, rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
+const S = {ask:true, branches:[], batch:1, stack:1, sails:64, config:null, belt:null, stacks:{}, item:'create:andesite_alloy', itemName:'', per:60, rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
 const items = new Map();
 const recipes = new Map();
 let itemsLoaded = false, plan = null, power = null, offline = false, seq = 0;
@@ -770,7 +782,7 @@ function setOverride(recipe, key, value){
 function bindNodePanel(n){
   const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
   on('pJei', 'click', () => openItem(n.res, n.type === 'surplus' ? 'uses' : 'made'));
-  on('pRecipe', 'change', e => { S.choice[n.res] = e.target.value; replan(); });
+  on('pRecipe', 'change', e => { const v = e.target.value; confirmChange(() => { S.choice[n.res] = v; }); });
   on('pMachine', 'change', e => setOverride(n.recipe, 'machine', e.target.value));
   on('pRpm', 'change', e => { const v = parseFloat(e.target.value); setOverride(n.recipe, 'rpm', v > 0 ? v : null); });
   on('pBatch', 'click', e => { const v = +e.target.dataset.v; if (v) setOverride(n.recipe, 'batch', v === 1 ? null : v); });
@@ -784,10 +796,9 @@ function bindNodePanel(n){
       list.forEach(r => recipes.set(r.id, r));
       $('pNote').innerHTML = `<h3>Рецепт</h3><select id="pCraftList"><option value="">Выберите рецепт</option>${list.map(r => `<option value="${esc(r.id)}">${esc(recipeLabel(r.id))}</option>`).join('')}</select>`;
       $('pCraftList').addEventListener('change', e => {
-        if (!e.target.value) return;
-        S.choice[n.res] = e.target.value;
-        S.stock = S.stock.filter(r => r !== n.res);
-        replan();
+        const v = e.target.value;
+        if (!v) return;
+        confirmChange(() => { S.choice[n.res] = v; S.stock = S.stock.filter(r => r !== n.res); });
       });
     } catch (e) { $('pNote').textContent = e.http ? e.message : 'Сервер недоступен.'; }
   });
@@ -840,7 +851,8 @@ function recipeRow(r, tab, res){
     const left = leftover(res);
     form = `<div class="addf"><input id="iPer" class="inp" type="number" min="0.01" step="any" placeholder="${esc(nameOf(mainRes(r)))} в минуту"><button class="btn sm" id="iAdd">Добавить</button><button class="btn sm" id="iAll"${left > 1e-6 ? '' : ' disabled'} title="${left > 1e-6 ? 'В остатке ' + fmt(left) + '/мин' : 'Остатка этого предмета нет'}">Весь остаток</button></div>`;
   }
-  return `<div class="rcp" data-search="${esc(search)}"><div class="rl"><span class="d">${esc(KIND[r.kind] || r.kind)}</span>${act}</div><div class="rf">${ins}<span class="ar">&rarr;</span>${outs}</div>${form}</div>`;
+  const others = r.outputs.length > 1 ? ` <span class="d">+${r.outputs.length - 1}</span>` : '';
+  return `<div class="rcp" data-search="${esc(search)}"><div class="rl"><span class="rt"><span class="rn">${esc(nameOf(mainRes(r)))}</span>${others}<span class="d rk">${esc(KIND[r.kind] || r.kind)}</span></span>${act}</div><div class="rf">${ins}<span class="ar">&rarr;</span>${outs}</div>${form}</div>`;
 }
 async function renderItemPanel(){
   const p = panel, body = $('panelBody');
@@ -880,7 +892,7 @@ async function renderItemPanel(){
     const go = e.target.closest('[data-res]');
     if (go) { openItem(go.dataset.res, panel.tab); return; }
     const use = e.target.closest('[data-use]');
-    if (use) { S.choice[p.res] = use.dataset.use; S.stock = S.stock.filter(r => r !== p.res); replan(); return; }
+    if (use) { confirmChange(() => { S.choice[p.res] = use.dataset.use; S.stock = S.stock.filter(r => r !== p.res); }); return; }
     const add = e.target.closest('[data-add]');
     if (add) { panel.add = panel.add === add.dataset.add ? null : add.dataset.add; renderItemPanel(); return; }
     if (e.target.id === 'iAll') { addBranch(null); return; }
@@ -888,9 +900,53 @@ async function renderItemPanel(){
   });
 }
 function addBranch(perMinute){
-  S.branches = [...S.branches, {recipe:panel.add, input:panel.res, per_minute:perMinute}];
-  panel.add = null;
-  replan();
+  const branch = {recipe:panel.add, input:panel.res, per_minute:perMinute};
+  confirmChange(() => { S.branches = [...S.branches, branch]; panel.add = null; });
+}
+// What a change would do to the raw resources and the stress, compared with the current plan.
+function planDiff(before, after){
+  const sources = p => {
+    const map = new Map();
+    for (const n of p.nodes) if (n.type === 'gather' || n.type === 'generate') map.set(n.res, n.per_minute);
+    return map;
+  };
+  const was = sources(before), now = sources(after);
+  const added = [...now].filter(([r]) => !was.has(r));
+  const changed = [...now].filter(([r, v]) => was.has(r) && Math.abs(v - was.get(r)) > 1e-6).map(([r, v]) => [r, was.get(r), v]);
+  const gone = [...was].filter(([r]) => !now.has(r));
+  return {added, changed, gone, suBefore:before.total_su, suAfter:after.total_su, any:added.length + changed.length + gone.length > 0 || Math.abs(before.total_su - after.total_su) > 1e-6};
+}
+function askConfirm(d){
+  const rows = list => list.map(([r, v]) => `<div class="row">${itemIcon(r, 18)}<span>${esc(nameOf(r))}</span><span class="v">${rateText(r, v)}</span></div>`).join('');
+  let h = `<h2>Схема будет пересчитана</h2>`;
+  if (d.added.length) h += `<h3>Новые ресурсы</h3>${rows(d.added)}`;
+  if (d.changed.length) h += `<h3>Изменится</h3>` + d.changed.map(([r, a, b]) => `<div class="row">${itemIcon(r, 18)}<span>${esc(nameOf(r))}</span><span class="d">${rateText(r, a)}</span><span class="v">${rateText(r, b)}</span></div>`).join('');
+  if (d.gone.length) h += `<h3>Больше не нужно</h3>${rows(d.gone)}`;
+  h += `<h3>Нагрузка</h3><div class="row"><span>${fmt(d.suBefore)} SU</span><span class="v p">${fmt(d.suAfter)} SU</span></div>`;
+  h += `<div class="btns"><button class="btn" id="askNo">Отмена</button><button class="btn yes" id="askYes">Да</button></div>`;
+  $('askBox').innerHTML = h;
+  $('ask').hidden = false;
+  return new Promise(done => {
+    const finish = v => { $('ask').hidden = true; removeEventListener('keydown', key); done(v); };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); finish(false); } };
+    addEventListener('keydown', key);
+    $('askYes').onclick = () => finish(true);
+    $('askNo').onclick = () => finish(false);
+    $('askYes').focus();
+  });
+}
+// Applies a change to the scheme, asking first when it would alter the resources.
+async function confirmChange(apply){
+  const saved = {branches:[...S.branches], choice:{...S.choice}, stock:[...S.stock]};
+  const addSaved = panel && panel.add;
+  const undo = () => { Object.assign(S, saved); if (panel && panel.kind === 'item') panel.add = addSaved; renderPanel(); };
+  apply();
+  if (!S.ask) return replan();
+  let preview;
+  try { preview = await api('/api/plan', request()); }
+  catch (e) { undo(); setStatus(e.http ? e.message : 'Сервер недоступен', true); return; }
+  const diff = planDiff(plan, preview);
+  if (!diff.any || await askConfirm(diff)) replan(); else undo();
 }
 function renderBranches(){
   const box = $('sBr');
@@ -937,6 +993,7 @@ function syncSettings(){
   const seg = (id, cur) => { $(id).innerHTML = [1, 4, 16, 64].map(v => `<button data-v="${v}"${v === cur ? ' class="on"' : ''}>${v}</button>`).join(''); };
   seg('dBatch', S.batch); seg('dStack', S.stack);
   $('cSails').value = S.sails;
+  $('cAsk').checked = S.ask;
   const c = cfg();
   for (const id of ['cMax', 'cFan', 'cBulkPress', 'cBulkCut', 'cSquare', 'cShapeless', 'cCrafter', 'cStone']) $(id).disabled = !c;
   if (!c) return;
@@ -960,6 +1017,11 @@ function bindSide(){
     }
     $('bNote').textContent = 'Список скопирован.';
   });
+  $('cAsk').addEventListener('change', e => {
+    S.ask = e.target.checked;
+    try { localStorage.setItem('createcalc.ask', S.ask ? '1' : '0'); } catch (err) { /* Remembering it is only a convenience. */ }
+  });
+  try { if (localStorage.getItem('createcalc.ask') === '0') S.ask = false; } catch (err) { /* Blocked storage keeps the default. */ }
   const segClick = (id, key) => $(id).addEventListener('click', e => { const v = +e.target.dataset.v; if (v) { S[key] = v; syncSettings(); replan(); } });
   segClick('dBatch', 'batch'); segClick('dStack', 'stack');
   $('cSails').addEventListener('change', e => { const v = parseInt(e.target.value, 10); if (v > 0) { S.sails = v; replan(); } });
