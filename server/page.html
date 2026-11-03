@@ -545,9 +545,10 @@ function bindHistory(){
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     // Text fields keep their own undo.
     if (e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) return;
-    const key = e.key.toLowerCase();
-    if (key === 'z' && !e.shiftKey) { travel(history.back, history.forward); e.preventDefault(); }
-    else if ((key === 'z' && e.shiftKey) || key === 'y') { travel(history.forward, history.back); e.preventDefault(); }
+    // The physical key, so a Russian or any other layout works the same.
+    const key = e.code;
+    if (key === 'KeyZ' && !e.shiftKey) { travel(history.back, history.forward); e.preventDefault(); }
+    else if ((key === 'KeyZ' && e.shiftKey) || key === 'KeyY') { travel(history.forward, history.back); e.preventDefault(); }
   });
 }
 async function replan(opts = {}){
