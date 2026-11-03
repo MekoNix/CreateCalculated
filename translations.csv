@@ -190,7 +190,6 @@ tipShare,"Make a link to this scheme: targets, recipes and settings. Nothing is 
 shareCopied,Link copied.,Ссылка скопирована.
 shareBad,This link is broken or from another version.,Ссылка повреждена или сделана в другой версии.
 shareMissing,"Part of this link no longer exists, left out: {0}.","Часть ссылки больше не существует, пропущено: {0}."
-autoShort,auto,авто
 recipeFilter,Search recipes,Поиск по рецептам
 autoRecipe,Automatic (cheapest),Автоматически (самый дешёвый)
 undone,"Undone (Ctrl+Z), redo: Ctrl+Shift+Z","Отменено (Ctrl+Z), вернуть: Ctrl+Shift+Z"
