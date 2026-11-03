@@ -66,8 +66,15 @@ async fn items(State(cat): State<Shared>, Query(query): Query<ItemQuery>) -> Jso
 }
 
 /// Which item stands for a tag when any member would do.
+/// A tag of one item is shown as that item too, which names `#c:nuggets/zinc` "Zinc Nugget".
 async fn tag_defaults(State(cat): State<Shared>) -> Json<serde_json::Value> {
-    Json(serde_json::to_value(cat.tag_defaults()).unwrap_or_default())
+    let mut shown = cat.tag_defaults().clone();
+    for (tag, members) in &cat.bundle.tags {
+        if let [only] = members.as_slice() {
+            shown.entry(tag.clone()).or_insert_with(|| only.clone());
+        }
+    }
+    Json(serde_json::to_value(shown).unwrap_or_default())
 }
 
 async fn recipe(State(cat): State<Shared>, Path(id): Path<String>) -> Result<Json<serde_json::Value>, ApiError> {

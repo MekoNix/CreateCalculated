@@ -109,6 +109,14 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 #recipeList .rt{flex:1;min-width:0}
 #recipeList .rk{display:block;color:var(--dim);font-size:10.5px}
 #recipeList .ok{color:var(--green);margin-left:auto;padding-left:6px}
+.rsel{display:flex;align-items:center;gap:6px;width:100%;height:24px;margin-top:6px;padding:0 6px;font-size:11.5px;cursor:pointer;text-align:left}
+.rsel:hover{border-color:var(--line2)}
+.rsel .rv{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rsel .ra{flex:none;color:var(--green);font-size:10.5px}
+.rsel .rd{flex:none;color:var(--dim)}
+.far .rsel{visibility:hidden}
+#recipeList #recipeRows{display:block;padding:0;cursor:default}
+#recipeList input{width:calc(100% - 6px);margin:3px;height:26px}
 .rbtn{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;cursor:pointer}
 /* Panel */
 #panel{position:fixed;right:0;top:0;bottom:0;width:340px;background:#17191d;border-left:1px solid var(--line);z-index:4;overflow:auto;padding:12px 14px 20px;display:none;scrollbar-width:none}
@@ -318,6 +326,7 @@ const STR = {
   bufferNote:['Источник отдаёт меньше стопки за раз, а на ленте стопки сами не собираются. Нужен ящик и латунный шлюз, настроенный ровно на {0} шт.','The source hands over less than a stack at a time, and stacks do not form on a belt by themselves. It needs a chest and a brass funnel set to exactly {0} items.'],
   withAxe:[': топор в руке',': axe in hand'], stripNote:['Деплоер с топором бьёт по поставленному бревну. Учтён только сам удар: установка и разрушение блока и износ топора не считаются.','A deployer with an axe hits a placed log. Only the hit is counted: placing and breaking the block and axe wear are not.'],
   share:['Поделиться','Share'], tipShare:['Сделать ссылку на эту схему: цели, рецепты и настройки. На сервере ничего не хранится, сайт посчитает всё заново по ссылке, поэтому в новой версии игры результат может измениться.','Make a link to this scheme: targets, recipes and settings. Nothing is stored on the server, the site works it out again from the link, so a new version of the game can change the result.'], shareCopied:['Ссылка скопирована.','Link copied.'], shareBad:['Ссылка повреждена или сделана в другой версии.','This link is broken or from another version.'], shareMissing:['Часть ссылки больше не существует, пропущено: {0}.','Part of this link no longer exists, left out: {0}.'],
+  autoShort:['авто','auto'], recipeFilter:['Поиск по рецептам','Search recipes'],
   autoRecipe:['Автоматически (самый дешёвый)','Automatic (cheapest)'], undone:['Отменено (Ctrl+Z), вернуть: Ctrl+Shift+Z','Undone (Ctrl+Z), redo: Ctrl+Shift+Z'],
   addHint:['Добавьте предмет. Можно сразу несколько: общие детали посчитаются вместе.','Add an item. Several work too: shared parts are counted together.'], added:['добавлено','added'],
   github:['GitHub','GitHub'], about:['О сайте','About'], aboutIntro:['CreateCalculated: калькулятор производства для мода Create и аддонов к нему.','CreateCalculated is a production calculator for Create mod and Create addons.'], aboutPictures:['Картинки предметов','Item pictures'],
@@ -810,7 +819,7 @@ const proc = kind => (KIND[kind] || '').toLowerCase();
 // Machines whose time does not follow RPM. A fan's RPM changes only how far its air reaches.
 const NO_RPM = new Set(['spout', 'item_drain', 'furnace', 'blast_furnace', 'smoker', 'hand']);
 function machineRows(n, kind){
-  const rcBtn = `<button class="rc" data-rc="1" aria-label="${esc(t('recipe'))}">&#9662;</button>`;
+  const rcBtn = '';
   const row = (m, xText, extra, text, btn) => `<div class="mach">${machineIcon(m, 18)}<span class="name">${esc(MACH[m])}<span class="proc">${esc(text)}</span></span><span class="x">×${xText}${extra || ''}</span>${btn || ''}</div>`;
   const loads = n.loads || [];
   if (loads.length > 1) {
@@ -843,6 +852,13 @@ function statsRows(loads, ownRpm, extraRight){
   const pct = l.machine === 'hand' ? '' : `<span class="r2 ${full >= .95 ? 'tight' : ''}">${t('load', Math.ceil(full * 100 - 1e-6))}</span>`;
   return `<div class="stats">${speed}${pct || '<span></span>'}<span>${su ? fmt(su) + ' SU' : `<span class="muted">${t('noSu')}</span>`}</span>${extraRight || beltPerFan(l) || '<span></span>'}</div>`;
 }
+// The recipe of a card as a field, opened like the item search. Shown when there is a choice.
+function recipeField(n){
+  if (!n.alternatives.length) return '';
+  const r = recipes.get(n.recipe), inputs = r.inputs.map(x => nameOf(x.res)).join(' + ');
+  const auto = S.choice[n.res] ? '' : `<span class="ra">${esc(t('autoShort'))}</span>`;
+  return `<button class="inp rsel" type="button" data-rc="1" aria-haspopup="listbox" title="${esc(recipeLabel(n.recipe))}">${auto}<span class="rv">${esc(inputs)}</span><span class="rd">&#9662;</span></button>`;
+}
 function cardHtml(n){
   const row = (res, rate) => `<div class="head">${itemIcon(res, 24)}<div><div class="t" title="${esc(nameOf(res))}">${esc(nameOf(res))}</div><div class="r">${rateText(res, rate)}</div></div></div>`;
   const head = row(n.res, n.rate);
@@ -852,7 +868,7 @@ function cardHtml(n){
     const kind = recipes.get(n.recipe).kind;
     const burn = S.heat && n.burners ? `<span class="r2 heat">${t(n.heat === 'superheated' ? 'superheated' : 'heated')} ×${n.burners}</span>` : '';
     const more = [...(n.more || [])].map(([res, rate]) => row(res, rate)).join('');
-    return machineRows(n, kind) + statsRows(n.loads, !!(S.overrides[n.recipe] && S.overrides[n.recipe].rpm), burn) + output(head + more);
+    return machineRows(n, kind) + recipeField(n) + statsRows(n.loads, !!(S.overrides[n.recipe] && S.overrides[n.recipe].rpm), burn) + output(head + more);
   }
   if (n.type === 'surplus') return head + `<div class="sub">${t('byProductCard')}</div>`;
   if (n.type === 'stock') return head + `<div class="sub green">${t('fromStock')}</div>`;
@@ -1113,7 +1129,7 @@ function bindNodePanel(n){
     } catch (e) { $('pNote').textContent = e.http ? e.message : t('noServer'); }
   });
 }
-const recipeMenu = {open:false, n:null, anchor:null, rows:[], active:0};
+const recipeMenu = {open:false, n:null, anchor:null, rows:[], shown:[], active:0, q:''};
 function closeRecipes(){
   if (!recipeMenu.open) return;
   recipeMenu.open = false;
@@ -1129,9 +1145,22 @@ function placeRecipes(){
   box.style.left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + 'px';
   box.style.top = (r.bottom + 4 + h + 8 <= innerHeight ? r.bottom + 4 : Math.max(8, r.top - h - 4)) + 'px';
 }
+function recipeText(id){
+  const r = recipes.get(id);
+  return id ? ((r ? r.inputs.map(x => nameOf(x.res)).join(' ') + ' ' + method(r.kind) : '') + ' ' + id).toLowerCase() : '';
+}
 function paintRecipes(){
-  const n = recipeMenu.n, picked = S.choice[n.res] || '';
-  $('recipeList').innerHTML = recipeMenu.rows.map((id, i) => {
+  const n = recipeMenu.n, picked = S.choice[n.res] || '', q = recipeMenu.q.trim().toLowerCase();
+  recipeMenu.shown = recipeMenu.rows.map((id, i) => i).filter(i => !q || (recipeMenu.rows[i] && recipeText(recipeMenu.rows[i]).includes(q)));
+  if (!recipeMenu.shown.includes(recipeMenu.active)) recipeMenu.active = recipeMenu.shown[0] ?? 0;
+  const list = $('recipeList');
+  if (recipeMenu.rows.length > 6 && !list.querySelector('input')) {
+    list.innerHTML = `<input class="inp" placeholder="${esc(t('recipeFilter'))}" autocomplete="off" spellcheck="false"><div id="recipeRows"></div>`;
+    const input = list.querySelector('input');
+    input.addEventListener('input', e => { recipeMenu.q = e.target.value; paintRecipes(); });
+  }
+  const target = list.querySelector('#recipeRows') || list;
+  target.innerHTML = recipeMenu.shown.map(i => recipeMenu.rows[i]).map((id, k) => { const i = recipeMenu.shown[k];
     const r = recipes.get(id);
     // The inputs tell recipes apart, the way of making them goes under.
     const name = id ? (r ? r.inputs.map(x => nameOf(x.res)).join(' + ') : id) : t('autoRecipe');
@@ -1144,11 +1173,14 @@ async function openRecipes(n, anchor){
   closeRecipes();
   const ids = [n.recipe, ...n.alternatives];
   await Promise.all(ids.filter(id => !recipes.has(id)).map(id => loadRecipe(id).catch(() => null)));
-  Object.assign(recipeMenu, {open:true, n, anchor, rows:['', ...ids.filter((id, i) => ids.indexOf(id) === i)]});
+  $('recipeList').innerHTML = '';
+  Object.assign(recipeMenu, {open:true, n, anchor, q:'', shown:[], rows:['', ...ids.filter((id, i) => ids.indexOf(id) === i)]});
   recipeMenu.active = Math.max(0, recipeMenu.rows.indexOf(S.choice[n.res] || ''));
   paintRecipes();
   $('recipeList').style.display = 'block';
   placeRecipes();
+  const filter = $('recipeList').querySelector('input');
+  if (filter) filter.focus();
 }
 function pickRecipe(i){
   const n = recipeMenu.n, id = recipeMenu.rows[i];
@@ -1158,14 +1190,18 @@ function pickRecipe(i){
 }
 function bindRecipes(){
   const box = $('recipeList');
-  box.addEventListener('mousedown', e => e.preventDefault());
+  box.addEventListener('mousedown', e => { if (e.target.tagName !== 'INPUT') e.preventDefault(); });
   box.addEventListener('click', e => { const row = e.target.closest('[data-i]'); if (row) pickRecipe(+row.dataset.i); });
   box.addEventListener('mouseover', e => { const row = e.target.closest('[data-i]'); if (row && recipeMenu.active !== +row.dataset.i) { recipeMenu.active = +row.dataset.i; paintRecipes(); } });
   addEventListener('pointerdown', e => { if (recipeMenu.open && !e.target.closest('#recipeList') && e.target !== recipeMenu.anchor && !recipeMenu.anchor.contains(e.target)) closeRecipes(); }, true);
   addEventListener('keydown', e => {
     if (!recipeMenu.open) return;
     const step = {ArrowDown:1, ArrowUp:-1}[e.key];
-    if (step) { recipeMenu.active = (recipeMenu.active + step + recipeMenu.rows.length) % recipeMenu.rows.length; paintRecipes(); e.preventDefault(); }
+    if (step) {
+      const at = recipeMenu.shown.indexOf(recipeMenu.active), len = recipeMenu.shown.length;
+      if (len) recipeMenu.active = recipeMenu.shown[(at + step + len) % len];
+      paintRecipes(); e.preventDefault();
+    }
     else if (e.key === 'Enter') { pickRecipe(recipeMenu.active); e.preventDefault(); }
     else if (e.key === 'Escape') { closeRecipes(); e.stopPropagation(); }
   }, true);
