@@ -311,6 +311,7 @@ const STR = {
   bufferNote:['Источник отдаёт меньше стопки за раз, а на ленте стопки сами не собираются. Нужен ящик и латунный шлюз, настроенный ровно на {0} шт.','The source hands over less than a stack at a time, and stacks do not form on a belt by themselves. It needs a chest and a brass funnel set to exactly {0} items.'],
   withAxe:[': топор в руке',': axe in hand'], stripNote:['Деплоер с топором бьёт по поставленному бревну. Учтён только сам удар: установка и разрушение блока и износ топора не считаются.','A deployer with an axe hits a placed log. Only the hit is counted: placing and breaking the block and axe wear are not.'],
   share:['Поделиться','Share'], tipShare:['Сделать ссылку на эту схему: цели, рецепты и настройки. На сервере ничего не хранится, сайт посчитает всё заново по ссылке, поэтому в новой версии игры результат может измениться.','Make a link to this scheme: targets, recipes and settings. Nothing is stored on the server, the site works it out again from the link, so a new version of the game can change the result.'], shareCopied:['Ссылка скопирована.','Link copied.'], shareBad:['Ссылка повреждена или сделана в другой версии.','This link is broken or from another version.'], shareMissing:['Часть ссылки больше не существует, пропущено: {0}.','Part of this link no longer exists, left out: {0}.'],
+  autoRecipe:['Автоматически (самый дешёвый)','Automatic (cheapest)'], backRecipe:['Вернуть прежний рецепт','Back to the previous recipe'],
   addHint:['Добавьте предмет. Можно сразу несколько: общие детали посчитаются вместе.','Add an item. Several work too: shared parts are counted together.'], added:['добавлено','added'],
   github:['GitHub','GitHub'], about:['О сайте','About'], aboutIntro:['CreateCalculated: калькулятор производства для мода Create и аддонов к нему.','CreateCalculated is a production calculator for Create mod and Create addons.'], aboutPictures:['Картинки предметов','Item pictures'],
   aboutPicturesText:['Картинки предметов собраны из файлов игры и принадлежат их авторам. Предметы Minecraft принадлежат Mojang, действует Minecraft EULA. Предметы Create принадлежат команде Create, на их ассеты действует All Rights Reserved. Предметы аддонов принадлежат авторам аддонов. Этот сайт не связан с Mojang и командой Create.','Item pictures are rendered from the game\'s files and belong to their authors. Minecraft items belong to Mojang, under the Minecraft EULA. Create items belong to the Create team, their assets are All Rights Reserved. Addon items belong to the authors of the addons. This site is not affiliated with Mojang or the Create team.'],
@@ -379,7 +380,7 @@ function bindTips(){
   document.addEventListener('focusout', () => { box.hidden = true; });
 }
 
-const S = {ask:true, branches:[], batch:1, stack:1, funnel:'andesite', sails:64, config:null, belt:null, stacks:{}, targets:[{item:'create:andesite_alloy', per:60}], rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
+const S = {ask:true, branches:[], batch:1, stack:1, funnel:'andesite', sails:64, config:null, belt:null, prev:{}, stacks:{}, targets:[{item:'create:andesite_alloy', per:60}], rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
 const items = new Map();
 const recipes = new Map();
 let itemsLoaded = false, plan = null, power = null, seq = 0;
@@ -515,6 +516,7 @@ async function replan(opts = {}){
   if (!S.targets.length) {
     // Branches hang off a scheme, so with nothing left to make they go too.
     S.branches = [];
+    S.choice = {}; S.prev = {}; S.overrides = {};
     power = null;
     setStatus('');
     show(EMPTY_PLAN, opts);
@@ -526,6 +528,7 @@ async function replan(opts = {}){
     await Promise.all(p.nodes.filter(n => n.type === 'recipe').map(n => loadRecipe(n.recipe)));
     if (my !== seq) return;
     setStatus('');
+    if (opts.prune) forgetUnused(p);
     show(p, opts);
     api('/api/power', {su:p.total_su, sails:S.sails, ...(S.config ? {config:S.config} : {})}).then(r => { if (my === seq) { power = r; if (panel && panel.kind === 'load') renderPanel(); } }).catch(() => {});
   } catch (e) {
@@ -969,7 +972,9 @@ function nodePanel(n){
   if (n.type === 'recipe') {
     const over = S.overrides[n.recipe] || {};
     const opts = [n.recipe, ...n.alternatives];
-    h += `<h3>${t('recipe')}</h3><select id="pRecipe">${opts.map(o => `<option value="${esc(o)}"${o === n.recipe ? ' selected' : ''}>${esc(recipeLabel(o))}</option>`).join('')}</select>`;
+    const auto = `<option value=""${S.choice[n.res] ? '' : ' selected'}>${esc(t('autoRecipe'))}</option>`;
+    h += `<h3>${t('recipe')}</h3><select id="pRecipe">${auto}${opts.map(o => `<option value="${esc(o)}"${S.choice[n.res] === o ? ' selected' : ''}>${esc(recipeLabel(o))}</option>`).join('')}</select>`;
+    if (n.res in S.prev) h += `<div class="btns"><button class="btn" id="pBack">${t('backRecipe')}</button></div>`;
     if (n.machine_options.length) h += `<h3>${t('machine')}</h3><select id="pMachine">${n.machine_options.map(m => `<option value="${m}"${m === n.loads[0].machine ? ' selected' : ''}>${esc(machineName(m, recipes.get(n.recipe).kind))}</option>`).join('')}</select>`;
     h += `<h3>${t('ownRpmTitle')}</h3><input id="pRpm" class="inp" type="number" min="1" step="any" placeholder="${t('commonRpm', fmt(S.rpm))}" value="${over.rpm ?? ''}">`;
     const l = n.loads[0];
@@ -1046,13 +1051,14 @@ function bindNodePanel(n){
   const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
   document.querySelectorAll('#panelBody [data-item]').forEach(row => row.addEventListener('click', () => openItem(row.dataset.item, 'uses')));
   on('pJei', 'click', () => openItem(n.res, n.type === 'surplus' ? 'uses' : 'made'));
-  on('pRecipe', 'change', e => { const v = e.target.value; confirmChange(() => { S.choice[n.res] = v; }); });
+  on('pRecipe', 'change', e => { const v = e.target.value; confirmChange(() => chooseRecipe(n.res, v)); });
+  on('pBack', 'click', () => confirmChange(() => chooseRecipe(n.res, S.prev[n.res])));
   on('pMachine', 'change', e => setOverride(n.recipe, 'machine', e.target.value));
   on('pRpm', 'change', e => { const v = parseFloat(e.target.value); setOverride(n.recipe, 'rpm', v > 0 ? v : null); });
   on('pBatch', 'click', e => { const v = +e.target.dataset.v; if (v) setOverride(n.recipe, 'batch', v === 1 ? null : v); });
   on('pStock', 'click', () => { if (!S.stock.includes(n.res)) S.stock.push(n.res); replan(); });
   on('pUnstock', 'click', () => { S.stock = S.stock.filter(r => r !== n.res); replan(); });
-  on('pReset', 'click', () => { delete S.choice[n.res]; delete S.overrides[n.recipe]; replan(); });
+  on('pReset', 'click', () => { chooseRecipe(n.res, ''); delete S.overrides[n.recipe]; replan(); });
   on('pCraft', 'click', async () => {
     try {
       const list = await api('/api/producers?item=' + encodeURIComponent(n.res));
@@ -1062,7 +1068,7 @@ function bindNodePanel(n){
       $('pCraftList').addEventListener('change', e => {
         const v = e.target.value;
         if (!v) return;
-        confirmChange(() => { S.choice[n.res] = v; S.stock = S.stock.filter(r => r !== n.res); });
+        confirmChange(() => { chooseRecipe(n.res, v); S.stock = S.stock.filter(r => r !== n.res); });
       });
     } catch (e) { $('pNote').textContent = e.http ? e.message : t('noServer'); }
   });
@@ -1139,7 +1145,7 @@ async function renderItemPanel(){
     const go = e.target.closest('[data-res]');
     if (go) { openItem(go.dataset.res, panel.tab); return; }
     const use = e.target.closest('[data-use]');
-    if (use) { confirmChange(() => { S.choice[p.res] = use.dataset.use; S.stock = S.stock.filter(r => r !== p.res); }); return; }
+    if (use) { confirmChange(() => { chooseRecipe(p.res, use.dataset.use); S.stock = S.stock.filter(r => r !== p.res); }); return; }
     const add = e.target.closest('[data-add]');
     if (add) askBranch(add.dataset.add, p.res);
   });
@@ -1244,8 +1250,24 @@ function openAbout(){
   $('aboutClose').focus();
 }
 // Applies a change to the scheme, asking first when it would alter the resources.
+// Picks the recipe for an item, an empty one meaning the cheapest. The one before is kept, so it
+// can be brought back with one click.
+function chooseRecipe(item, recipe){
+  const before = S.choice[item] || '';
+  if (before === (recipe || '')) return;
+  S.prev[item] = before;
+  if (recipe) S.choice[item] = recipe; else delete S.choice[item];
+}
+// Choices for items the scheme no longer has are forgotten, so an item added again starts fresh.
+function forgetUnused(p){
+  const used = new Set(p.nodes.map(nodeRes));
+  for (const item of Object.keys(S.choice)) if (!used.has(item)) delete S.choice[item];
+  for (const item of Object.keys(S.prev)) if (!used.has(item)) delete S.prev[item];
+  const recipes = new Set(p.nodes.map(n => n.recipe).filter(Boolean));
+  for (const id of Object.keys(S.overrides)) if (!recipes.has(id)) delete S.overrides[id];
+}
 async function confirmChange(apply){
-  const saved = {branches:[...S.branches], choice:{...S.choice}, stock:[...S.stock]};
+  const saved = {branches:[...S.branches], choice:{...S.choice}, prev:{...S.prev}, stock:[...S.stock]};
   // The recipe browser keeps what was typed, other panels redraw to undo a changed selection.
   const undo = () => { Object.assign(S, saved); if (!panel || panel.kind !== 'item') renderPanel(); };
   apply();
@@ -1611,7 +1633,7 @@ function bindControls(){
       const per = parseFloat($('newPer').value);
       S.targets = [...S.targets, {item:it.id, per:per > 0 ? per : 60}];
     }
-    renderTargets(); paintDrop(); later({fit:true});
+    renderTargets(); paintDrop(); later({fit:true, prune:true});
   }, it => chosen(it.id) ? t('added') : it.id.split(':')[0]);
   $('goalList').addEventListener('input', e => {
     const row = e.target.closest('[data-i]'), v = parseFloat(e.target.value);
@@ -1620,7 +1642,7 @@ function bindControls(){
   $('goalList').addEventListener('click', e => {
     if (!e.target.classList.contains('x')) return;
     S.targets = S.targets.filter((_, i) => i !== +e.target.closest('[data-i]').dataset.i);
-    renderTargets(); later({fit:true});
+    renderTargets(); later({fit:true, prune:true});
   });
   const num = (id, key) => $(id).addEventListener('input', e => {
     const v = parseFloat(e.target.value);

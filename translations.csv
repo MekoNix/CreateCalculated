@@ -190,6 +190,8 @@ tipShare,"Make a link to this scheme: targets, recipes and settings. Nothing is 
 shareCopied,Link copied.,Ссылка скопирована.
 shareBad,This link is broken or from another version.,Ссылка повреждена или сделана в другой версии.
 shareMissing,"Part of this link no longer exists, left out: {0}.","Часть ссылки больше не существует, пропущено: {0}."
+autoRecipe,Automatic (cheapest),Автоматически (самый дешёвый)
+backRecipe,Back to the previous recipe,Вернуть прежний рецепт
 addHint,Add an item. Several work too: shared parts are counted together.,Добавьте предмет. Можно сразу несколько: общие детали посчитаются вместе.
 added,added,добавлено
 github,GitHub,GitHub
