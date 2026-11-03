@@ -73,9 +73,9 @@ needServer,This needs a running server.,Нужен запущенный серв
 recipe,Recipe,Рецепт
 stepsCount,step | steps,шаг | шага | шагов
 batchShort,", batch {0}",", партия {0}"
-beltEach,each on a {0}-block belt,каждый на ленту {0} бл.
-beltOne,on a {0}-block belt,на ленту {0} бл.
-fanBeltTitle,One fan works on the whole belt in its stream,Один вентилятор работает на всю ленту в своём потоке
+beltEach,blows over {0} blocks of belt each,обдув ленты: {0} бл. у каждого
+beltOne,blows over {0} blocks of belt,обдув ленты: {0} бл.
+fanBeltTitle,"A fan processes items on the straight belt in its stream. To keep up with the whole flow, each fan needs a belt this long under its stream. Put the fan at the start or end of a straight belt, with the catalyst (water, lava, fire) between it and the belt.","Вентилятор обрабатывает предметы на прямой ленте, которая лежит в его потоке. Чтобы успеть обработать весь поток, под струёй каждого вентилятора должна идти лента такой длины. Поставьте вентилятор в начале или в конце прямой ленты, катализатор (воду, лаву, огонь) между ним и лентой."
 noRpm,does not depend on RPM,от RPM не зависит
 ownRpm, (own), (свой)
 load,load {0}%,загрузка {0}%
@@ -122,7 +122,7 @@ fanRpmNote,"Fan RPM changes only how far the stream reaches, not the processing 
 batchTitle,Batch,Партия
 stepsTitle,Assembly steps,Шаги сборки
 fanTitle,Fan,Вентилятор
-beltPerFan,Belt per fan,Лента на один вентилятор
+beltPerFan,Belt length in one fan’s stream,Длина ленты под потоком одного вентилятора
 blocksN,{0} blocks,{0} бл.
 reach,Stream reach,Дальность потока
 upToBlocks,up to {0} blocks,до {0} бл.
