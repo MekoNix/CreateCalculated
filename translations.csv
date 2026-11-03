@@ -75,7 +75,7 @@ stepsCount,step | steps,шаг | шага | шагов
 batchShort,", batch {0}",", партия {0}"
 beltEach,blows over {0} blocks of belt each,обдув ленты: {0} бл. у каждого
 beltOne,blows over {0} blocks of belt,обдув ленты: {0} бл.
-fanBeltTitle,"A fan processes items on the straight belt in its stream. To keep up with the whole flow, each fan needs a belt this long under its stream. Put the fan at the start or end of a straight belt, with the catalyst (water, lava, fire) between it and the belt.","Вентилятор обрабатывает предметы на прямой ленте, которая лежит в его потоке. Чтобы успеть обработать весь поток, под струёй каждого вентилятора должна идти лента такой длины. Поставьте вентилятор в начале или в конце прямой ленты, катализатор (воду, лаву, огонь) между ним и лентой."
+fanBeltTitle,"Each fan needs this many belt blocks under its stream to keep up with the flow of items. Put the fan one block above the belt, at its start or end, blowing along it: the stream then runs over the belt and works on every belt block under it. A fan level with the belt, or blowing across it, stops at the first belt block and works on one spot only. The catalyst (water, lava, fire) goes in the stream between the fan and the belt.","Столько блоков ленты должно лежать под потоком каждого вентилятора, чтобы он успевал за потоком предметов. Ставьте вентилятор на блок выше ленты у её начала или конца, чтобы он дул вдоль неё: поток идёт над лентой и обрабатывает каждый её блок под собой. Если вентилятор стоит на уровне ленты или дует поперёк, поток упирается в первый блок ленты и работает только в одной точке. Катализатор (вода, лава, огонь) ставится в поток между вентилятором и лентой."
 noRpm,does not depend on RPM,от RPM не зависит
 ownRpm, (own), (свой)
 load,load {0}%,загрузка {0}%
@@ -127,7 +127,7 @@ blocksN,{0} blocks,{0} бл.
 reach,Stream reach,Дальность потока
 upToBlocks,up to {0} blocks,до {0} бл.
 maxBeltRpm,Highest belt RPM,Максимум RPM ленты
-fanNote,"One fan works on the whole belt in its stream. Put it at the start or end of a straight belt, with the catalyst between it and the belt.","Один вентилятор работает на всю ленту в своём потоке. Поставьте его в начале или конце прямой ленты, катализатор между ним и лентой."
+fanNote,"Put the fan one block above the belt, at its start or end, blowing along it: the stream then runs over the belt and works on every belt block under it. A fan level with the belt, or blowing across it, stops at the first belt block and works on one spot only. The catalyst (water, lava, fire) goes in the stream between the fan and the belt.","Ставьте вентилятор на блок выше ленты у её начала или конца, чтобы он дул вдоль неё: поток идёт над лентой и обрабатывает каждый её блок под собой. Если вентилятор стоит на уровне ленты или дует поперёк, поток упирается в первый блок ленты и работает только в одной точке. Катализатор (вода, лава, огонь) ставится в поток между вентилятором и лентой."
 inputs,Inputs,Входы
 outputs,Outputs,Выходы
 none,None,Нет
