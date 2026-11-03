@@ -104,6 +104,12 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 #langBtn::after{content:"\25BE";color:var(--dim)}
 #langCur{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #langList div{white-space:nowrap}
+#recipeList{width:340px}
+#recipeList div{align-items:flex-start}
+#recipeList .rt{flex:1;min-width:0}
+#recipeList .rk{display:block;color:var(--dim);font-size:10.5px}
+#recipeList .ok{color:var(--green);margin-left:auto;padding-left:6px}
+.rbtn{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;cursor:pointer}
 /* Panel */
 #panel{position:fixed;right:0;top:0;bottom:0;width:340px;background:#17191d;border-left:1px solid var(--line);z-index:4;overflow:auto;padding:12px 14px 20px;display:none;scrollbar-width:none}
 #panel::-webkit-scrollbar{display:none}
@@ -245,6 +251,7 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 <aside id="panel"><button id="close" data-t-aria="close">&times;</button><div id="panelBody"></div></aside>
 <div id="sugg" class="drop"></div>
 <div id="langList" class="drop" role="listbox"></div>
+<div id="recipeList" class="drop" role="listbox"></div>
 <div id="zoom"><button id="zOut" data-t-aria="zoomOut">&minus;</button><span id="zPct"></span><button id="zIn" data-t-aria="zoomIn">+</button><button id="zFit" data-t="fit"></button></div>
 <div id="foot"><a href="https://github.com/MekoNix/CreateCalculated" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span data-t="github"></span></a><button id="aboutBtn" data-t="about"></button></div>
 <div id="tip" hidden></div>
@@ -311,7 +318,7 @@ const STR = {
   bufferNote:['Источник отдаёт меньше стопки за раз, а на ленте стопки сами не собираются. Нужен ящик и латунный шлюз, настроенный ровно на {0} шт.','The source hands over less than a stack at a time, and stacks do not form on a belt by themselves. It needs a chest and a brass funnel set to exactly {0} items.'],
   withAxe:[': топор в руке',': axe in hand'], stripNote:['Деплоер с топором бьёт по поставленному бревну. Учтён только сам удар: установка и разрушение блока и износ топора не считаются.','A deployer with an axe hits a placed log. Only the hit is counted: placing and breaking the block and axe wear are not.'],
   share:['Поделиться','Share'], tipShare:['Сделать ссылку на эту схему: цели, рецепты и настройки. На сервере ничего не хранится, сайт посчитает всё заново по ссылке, поэтому в новой версии игры результат может измениться.','Make a link to this scheme: targets, recipes and settings. Nothing is stored on the server, the site works it out again from the link, so a new version of the game can change the result.'], shareCopied:['Ссылка скопирована.','Link copied.'], shareBad:['Ссылка повреждена или сделана в другой версии.','This link is broken or from another version.'], shareMissing:['Часть ссылки больше не существует, пропущено: {0}.','Part of this link no longer exists, left out: {0}.'],
-  autoRecipe:['Автоматически (самый дешёвый)','Automatic (cheapest)'], backRecipe:['Вернуть прежний рецепт','Back to the previous recipe'],
+  autoRecipe:['Автоматически (самый дешёвый)','Automatic (cheapest)'], undone:['Отменено (Ctrl+Z), вернуть: Ctrl+Shift+Z','Undone (Ctrl+Z), redo: Ctrl+Shift+Z'],
   addHint:['Добавьте предмет. Можно сразу несколько: общие детали посчитаются вместе.','Add an item. Several work too: shared parts are counted together.'], added:['добавлено','added'],
   github:['GitHub','GitHub'], about:['О сайте','About'], aboutIntro:['CreateCalculated: калькулятор производства для мода Create и аддонов к нему.','CreateCalculated is a production calculator for Create mod and Create addons.'], aboutPictures:['Картинки предметов','Item pictures'],
   aboutPicturesText:['Картинки предметов собраны из файлов игры и принадлежат их авторам. Предметы Minecraft принадлежат Mojang, действует Minecraft EULA. Предметы Create принадлежат команде Create, на их ассеты действует All Rights Reserved. Предметы аддонов принадлежат авторам аддонов. Этот сайт не связан с Mojang и командой Create.','Item pictures are rendered from the game\'s files and belong to their authors. Minecraft items belong to Mojang, under the Minecraft EULA. Create items belong to the Create team, their assets are All Rights Reserved. Addon items belong to the authors of the addons. This site is not affiliated with Mojang or the Create team.'],
@@ -380,7 +387,7 @@ function bindTips(){
   document.addEventListener('focusout', () => { box.hidden = true; });
 }
 
-const S = {ask:true, branches:[], batch:1, stack:1, funnel:'andesite', sails:64, config:null, belt:null, prev:{}, stacks:{}, targets:[{item:'create:andesite_alloy', per:60}], rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
+const S = {ask:true, branches:[], batch:1, stack:1, funnel:'andesite', sails:64, config:null, belt:null, stacks:{}, targets:[{item:'create:andesite_alloy', per:60}], rpm:256, mode:'full_auto', heat:true, stock:[], choice:{}, overrides:{}};
 const items = new Map();
 const recipes = new Map();
 let itemsLoaded = false, plan = null, power = null, seq = 0;
@@ -510,13 +517,47 @@ const outputRate = (n, r, res) => n.runs_per_min * r.outputs.filter(o => o.res =
 const nodeRes = n => n.type === 'recipe' ? (n.produces || mainRes(recipes.get(n.recipe))) : n.res;
 
 const EMPTY_PLAN = {nodes:[], edges:[], total_su:0, machines:{}, heat:null, warnings:[], manual:[], build:[], branches:[]};
+/* ---------- Undo: Ctrl+Z steps back through schemes, Ctrl+Shift+Z or Ctrl+Y forward ---------- */
+const HISTORY_KEYS = ['targets', 'rpm', 'mode', 'heat', 'belt', 'batch', 'stack', 'funnel', 'sails', 'config', 'stock', 'choice', 'overrides', 'stacks', 'branches'];
+const history = {back:[], forward:[], now:null};
+const snapshot = () => JSON.stringify(HISTORY_KEYS.map(k => S[k]));
+// Called by every replan, so each change of the scheme becomes one step.
+function remember(fromHistory){
+  const now = snapshot();
+  if (!fromHistory && history.now !== null && now !== history.now) {
+    history.back.push(history.now);
+    if (history.back.length > 200) history.back.shift();
+    history.forward = [];
+  }
+  history.now = now;
+}
+function travel(from, to){
+  if (!from.length) return;
+  to.push(history.now);
+  JSON.parse(from.pop()).forEach((v, i) => { S[HISTORY_KEYS[i]] = v; });
+  closeRecipes();
+  renderTargets(); syncControls(); syncSettings();
+  setNote(S.config ? 'cfgOwn' : 'cfgDefault');
+  replan({history:true}).then(() => { if (from === history.back) setStatus(t('undone')); });
+}
+function bindHistory(){
+  addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    // Text fields keep their own undo.
+    if (e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) return;
+    const key = e.key.toLowerCase();
+    if (key === 'z' && !e.shiftKey) { travel(history.back, history.forward); e.preventDefault(); }
+    else if ((key === 'z' && e.shiftKey) || key === 'y') { travel(history.forward, history.back); e.preventDefault(); }
+  });
+}
 async function replan(opts = {}){
   const my = ++seq;
+  remember(opts.history);
   clearShare();
   if (!S.targets.length) {
     // Branches hang off a scheme, so with nothing left to make they go too.
     S.branches = [];
-    S.choice = {}; S.prev = {}; S.overrides = {};
+    S.choice = {}; S.overrides = {};
     power = null;
     setStatus('');
     show(EMPTY_PLAN, opts);
@@ -972,9 +1013,8 @@ function nodePanel(n){
   if (n.type === 'recipe') {
     const over = S.overrides[n.recipe] || {};
     const opts = [n.recipe, ...n.alternatives];
-    const auto = `<option value=""${S.choice[n.res] ? '' : ' selected'}>${esc(t('autoRecipe'))}</option>`;
-    h += `<h3>${t('recipe')}</h3><select id="pRecipe">${auto}${opts.map(o => `<option value="${esc(o)}"${S.choice[n.res] === o ? ' selected' : ''}>${esc(recipeLabel(o))}</option>`).join('')}</select>`;
-    if (n.res in S.prev) h += `<div class="btns"><button class="btn" id="pBack">${t('backRecipe')}</button></div>`;
+    const current = S.choice[n.res] ? recipeLabel(n.recipe) : t('autoRecipe');
+    h += `<h3>${t('recipe')}</h3><button id="pRecipe" class="inp rbtn" type="button" aria-haspopup="listbox"><span>${esc(current)}</span><span>&#9662;</span></button>`;
     if (n.machine_options.length) h += `<h3>${t('machine')}</h3><select id="pMachine">${n.machine_options.map(m => `<option value="${m}"${m === n.loads[0].machine ? ' selected' : ''}>${esc(machineName(m, recipes.get(n.recipe).kind))}</option>`).join('')}</select>`;
     h += `<h3>${t('ownRpmTitle')}</h3><input id="pRpm" class="inp" type="number" min="1" step="any" placeholder="${t('commonRpm', fmt(S.rpm))}" value="${over.rpm ?? ''}">`;
     const l = n.loads[0];
@@ -1051,8 +1091,7 @@ function bindNodePanel(n){
   const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
   document.querySelectorAll('#panelBody [data-item]').forEach(row => row.addEventListener('click', () => openItem(row.dataset.item, 'uses')));
   on('pJei', 'click', () => openItem(n.res, n.type === 'surplus' ? 'uses' : 'made'));
-  on('pRecipe', 'change', e => { const v = e.target.value; confirmChange(() => chooseRecipe(n.res, v)); });
-  on('pBack', 'click', () => confirmChange(() => chooseRecipe(n.res, S.prev[n.res])));
+  on('pRecipe', 'click', e => openRecipes(n, e.currentTarget));
   on('pMachine', 'change', e => setOverride(n.recipe, 'machine', e.target.value));
   on('pRpm', 'change', e => { const v = parseFloat(e.target.value); setOverride(n.recipe, 'rpm', v > 0 ? v : null); });
   on('pBatch', 'click', e => { const v = +e.target.dataset.v; if (v) setOverride(n.recipe, 'batch', v === 1 ? null : v); });
@@ -1072,6 +1111,67 @@ function bindNodePanel(n){
       });
     } catch (e) { $('pNote').textContent = e.http ? e.message : t('noServer'); }
   });
+}
+const recipeMenu = {open:false, n:null, anchor:null, rows:[], active:0};
+function closeRecipes(){
+  if (!recipeMenu.open) return;
+  recipeMenu.open = false;
+  $('recipeList').style.display = 'none';
+  $('recipeList').innerHTML = '';
+}
+function placeRecipes(){
+  if (!recipeMenu.open) return;
+  const box = $('recipeList'), r = recipeMenu.anchor.getBoundingClientRect();
+  if (!r.width) { closeRecipes(); return; }
+  box.style.maxHeight = Math.min(420, innerHeight - 16) + 'px';
+  const w = box.offsetWidth, h = box.offsetHeight;
+  box.style.left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + 'px';
+  box.style.top = (r.bottom + 4 + h + 8 <= innerHeight ? r.bottom + 4 : Math.max(8, r.top - h - 4)) + 'px';
+}
+function paintRecipes(){
+  const n = recipeMenu.n, picked = S.choice[n.res] || '';
+  $('recipeList').innerHTML = recipeMenu.rows.map((id, i) => {
+    const r = recipes.get(id);
+    // The inputs tell recipes apart, the way of making them goes under.
+    const name = id ? (r ? r.inputs.map(x => nameOf(x.res)).join(' + ') : id) : t('autoRecipe');
+    const how = id ? method(r ? r.kind : '') + (isStripping(id) ? t('withAxe') : '') : (picked ? '' : recipeLabel(n.recipe));
+    return `<div role="option" data-i="${i}" class="${i === recipeMenu.active ? 'on' : ''}">${id ? itemIcon(mainRes(r) || n.res, 20) : itemIcon(n.res, 20)}<span class="rt">${esc(name)}<span class="rk">${esc(how)}</span></span>${id === picked ? '<span class="ok">&#10003;</span>' : ''}</div>`;
+  }).join('');
+}
+// Every recipe that can make the card's item, with Automatic first, picked like an item in the search.
+async function openRecipes(n, anchor){
+  closeRecipes();
+  const ids = [n.recipe, ...n.alternatives];
+  await Promise.all(ids.filter(id => !recipes.has(id)).map(id => loadRecipe(id).catch(() => null)));
+  Object.assign(recipeMenu, {open:true, n, anchor, rows:['', ...ids.filter((id, i) => ids.indexOf(id) === i)]});
+  recipeMenu.active = Math.max(0, recipeMenu.rows.indexOf(S.choice[n.res] || ''));
+  paintRecipes();
+  $('recipeList').style.display = 'block';
+  placeRecipes();
+}
+function pickRecipe(i){
+  const n = recipeMenu.n, id = recipeMenu.rows[i];
+  closeRecipes();
+  if ((S.choice[n.res] || '') === id) return;
+  confirmChange(() => chooseRecipe(n.res, id));
+}
+function bindRecipes(){
+  const box = $('recipeList');
+  box.addEventListener('mousedown', e => e.preventDefault());
+  box.addEventListener('click', e => { const row = e.target.closest('[data-i]'); if (row) pickRecipe(+row.dataset.i); });
+  box.addEventListener('mouseover', e => { const row = e.target.closest('[data-i]'); if (row && recipeMenu.active !== +row.dataset.i) { recipeMenu.active = +row.dataset.i; paintRecipes(); } });
+  addEventListener('pointerdown', e => { if (recipeMenu.open && !e.target.closest('#recipeList') && e.target !== recipeMenu.anchor && !recipeMenu.anchor.contains(e.target)) closeRecipes(); }, true);
+  addEventListener('keydown', e => {
+    if (!recipeMenu.open) return;
+    const step = {ArrowDown:1, ArrowUp:-1}[e.key];
+    if (step) { recipeMenu.active = (recipeMenu.active + step + recipeMenu.rows.length) % recipeMenu.rows.length; paintRecipes(); e.preventDefault(); }
+    else if (e.key === 'Enter') { pickRecipe(recipeMenu.active); e.preventDefault(); }
+    else if (e.key === 'Escape') { closeRecipes(); e.stopPropagation(); }
+  }, true);
+  addEventListener('resize', placeRecipes);
+  addEventListener('scroll', placeRecipes, true);
+  // Moving the graph would leave the list pointing at nothing.
+  $('canvas').addEventListener('wheel', closeRecipes);
 }
 function openNode(id, focusRecipe){
   const n = G.nodes.get(id);
@@ -1250,24 +1350,19 @@ function openAbout(){
   $('aboutClose').focus();
 }
 // Applies a change to the scheme, asking first when it would alter the resources.
-// Picks the recipe for an item, an empty one meaning the cheapest. The one before is kept, so it
-// can be brought back with one click.
+// Picks the recipe for an item, an empty one meaning the cheapest.
 function chooseRecipe(item, recipe){
-  const before = S.choice[item] || '';
-  if (before === (recipe || '')) return;
-  S.prev[item] = before;
   if (recipe) S.choice[item] = recipe; else delete S.choice[item];
 }
 // Choices for items the scheme no longer has are forgotten, so an item added again starts fresh.
 function forgetUnused(p){
   const used = new Set(p.nodes.map(nodeRes));
   for (const item of Object.keys(S.choice)) if (!used.has(item)) delete S.choice[item];
-  for (const item of Object.keys(S.prev)) if (!used.has(item)) delete S.prev[item];
   const recipes = new Set(p.nodes.map(n => n.recipe).filter(Boolean));
   for (const id of Object.keys(S.overrides)) if (!recipes.has(id)) delete S.overrides[id];
 }
 async function confirmChange(apply){
-  const saved = {branches:[...S.branches], choice:{...S.choice}, prev:{...S.prev}, stock:[...S.stock]};
+  const saved = {branches:[...S.branches], choice:{...S.choice}, stock:[...S.stock]};
   // The recipe browser keeps what was typed, other panels redraw to undo a changed selection.
   const undo = () => { Object.assign(S, saved); if (!panel || panel.kind !== 'item') renderPanel(); };
   apply();
@@ -1439,7 +1534,7 @@ function bindCanvas(){
     const n = card && G.nodes.get(card.dataset.id);
     const label = e.target.closest('.elabel');
     pressedAt = performance.now();
-    drag = n ? {n, sx:e.clientX, sy:e.clientY, ox:n.x, oy:n.y, moved:false, rc:!!e.target.closest('[data-rc]')}
+    drag = n ? {n, sx:e.clientX, sy:e.clientY, ox:n.x, oy:n.y, moved:false, rc:e.target.closest('[data-rc]')}
              : {pan:true, edge:label && label.dataset.edge, sx:e.clientX, sy:e.clientY, ox:view.x, oy:view.y, moved:false};
     cv.setPointerCapture(e.pointerId);
     if (!n) cv.classList.add('pan');
@@ -1460,7 +1555,7 @@ function bindCanvas(){
     if (!drag) return;
     cv.classList.remove('pan');
     // A long press means the user meant to move it and changed their mind, so nothing opens.
-    if (!drag.moved && performance.now() - pressedAt < CLICK_MS) { if (drag.n) openNode(drag.n.id, drag.rc); else if (drag.edge) openEdge(drag.edge); else if (panel) closePanel(); }
+    if (!drag.moved && performance.now() - pressedAt < CLICK_MS) { if (drag.n && drag.rc) openRecipes(drag.n, drag.rc); else if (drag.n) openNode(drag.n.id); else if (drag.edge) openEdge(drag.edge); else if (panel) closePanel(); }
     drag = null;
   };
   cv.addEventListener('pointerup', up);
@@ -1680,7 +1775,7 @@ async function start(){
   if (h.get('belt')) S.belt = +h.get('belt');
   if (h.get('stack')) S.stacks = JSON.parse(h.get('stack'));
   const sharedNotice = await loadShared(h);
-  bindCanvas(); bindDrop(); bindLangs(); bindControls(); bindSide(); bindTips(); syncControls(); applyView(); await loadDefaults();
+  bindCanvas(); bindDrop(); bindLangs(); bindRecipes(); bindHistory(); bindControls(); bindSide(); bindTips(); syncControls(); applyView(); await loadDefaults();
   if (noteArgs[0] === 'cfgOwn') setNote('cfgOwn');
   await replan({fit:true});
   syncControls();
